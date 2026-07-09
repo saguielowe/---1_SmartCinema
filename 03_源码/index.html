@@ -4,11 +4,87 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SmartCinema</title>
+    <link rel="stylesheet" href="./css/style.css" />
   </head>
   <body>
-    <main>
-      <h1>SmartCinema</h1>
-      <p>项目初始化完成，后续可在此接入影院布局、智能推荐和订单中心。</p>
-    </main>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Web Frontend Final Project</p>
+          <h1>SmartCinema</h1>
+        </div>
+        <button class="ghost-button" type="button">无障碍模式</button>
+      </header>
+
+      <main class="page-grid">
+        <section class="panel form-panel">
+          <h2>用户与购票条件</h2>
+          <p class="panel-note">D 负责页面外壳与表单布局，B 负责定义推荐输入字段。</p>
+          <form class="ticket-form">
+            <label>
+              票种
+              <select>
+                <option>个人票</option>
+                <option>情侣票</option>
+                <option>家庭票</option>
+                <option>团体票</option>
+              </select>
+            </label>
+            <label>
+              人数
+              <input type="number" min="1" value="2" />
+            </label>
+            <label>
+              偏好
+              <select>
+                <option>中间区域优先</option>
+                <option>后排优先</option>
+                <option>靠过道优先</option>
+              </select>
+            </label>
+            <button type="button" class="primary-button">生成推荐</button>
+          </form>
+        </section>
+
+        <section class="panel seat-panel">
+          <div class="panel-head">
+            <div>
+              <h2>影厅选座</h2>
+              <p class="panel-note">A 负责 Canvas 座位图和手动选座交互，风格仍跟随统一 UI。</p>
+            </div>
+            <div class="legend">
+              <span><i class="seat-dot available"></i>可选</span>
+              <span><i class="seat-dot selected"></i>已选</span>
+              <span><i class="seat-dot sold"></i>已售</span>
+            </div>
+          </div>
+
+          <div class="screen-label">银幕 SCREEN</div>
+          <canvas id="seat-canvas" width="960" height="560" aria-label="影厅座位图"></canvas>
+        </section>
+
+        <aside class="panel side-panel">
+          <section>
+            <h2>推荐结果</h2>
+            <p class="panel-note">B 输出推荐座位、备选方案和推荐理由。</p>
+            <ul class="result-list" id="recommendation-list">
+              <li>推荐座位：待接入</li>
+              <li>推荐理由：待接入</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>订单中心</h2>
+            <p class="panel-note">C 负责用户状态、订单流转和 LocalStorage 存储。</p>
+            <ul class="result-list" id="order-list">
+              <li>当前订单：待接入</li>
+              <li>热度统计：待接入</li>
+            </ul>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <script type="module" src="./js/app.js"></script>
   </body>
 </html>
