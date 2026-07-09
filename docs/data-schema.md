@@ -17,6 +17,8 @@
   username: "testUser",
   password: "123456",
   role: "user", // user | admin
+  nickname: "子嘉",
+  createdAt: 1780000000000,
   accessibilityMode: {
     largeText: false,
     highContrast: false,
@@ -31,6 +33,12 @@
 }
 ```
 
+说明：
+
+- 当前注册建议先简化为 `username + password`
+- `nickname` 可选，没有时间可以不做
+- 不必为了这次作业单独做邮箱验证
+
 ## 电影 `movie`
 
 ```js
@@ -39,7 +47,7 @@
   title: "Interstellar",
   duration: 169,
   poster: "assets/posters/interstellar.jpg",
-  tags: ["sci-fi", "adventure"],
+  tags: ["sci-fi", "adventure", "可自行添加"],
   showType: "imax", // 2d | 3d | imax
   rating: 9.3,
   language: "en"
@@ -58,7 +66,9 @@
   date: "2026-07-10",
   startTime: "19:30",
   endTime: "22:19",
-  price: 58
+  price: 58,
+  remainingSeats: 86,
+  status: "on_sale" // on_sale | closed
 }
 ```
 
@@ -69,11 +79,13 @@
   hallId: "hall-imax",
   hallName: "IMAX厅",
   hallType: "imax", // small | medium | large | imax
+  capacity: 120,
+  rowCount: 8,
   screenLabel: "银幕",
   rows: [
     { rowLabel: "A", pattern: "XXSSSSAASSSSXX", offsetX: -8, curveDepth: 8 },
     { rowLabel: "B", pattern: "XSSSSSAASSSSSX", offsetX: -4, curveDepth: 8 },
-    { rowLabel: "C", pattern: "SSSSSSAASSSSSS", offsetX: 0, curveDepth: 8 }
+    { rowLabel: "C", pattern: "SSSSSSAASSSS", offsetX: 0, curveDepth: 8 } // 居中布局，每排座位数允许不一样。
   ]
 }
 ```
@@ -100,7 +112,11 @@
 {
   scheduleId: "s001",
   seatId: "C-8",
-  status: "available" // available | selected | reserved | sold
+  status: "available", // available | selected | reserved | sold
+  userId: "",
+  orderId: "",
+  lockedUntil: null,
+  updatedAt: 1780000000000
 }
 ```
 
@@ -108,6 +124,8 @@
 
 - `selected` 更适合作为前端临时状态
 - 如果想让持久化更清晰，也可以只存 `available / reserved / sold`
+- `reserved` 表示锁票 / 已预订但未最终购票
+- `lockedUntil` 用来做假支付场景下的锁票倒计时
 
 ## 推荐输入 `recommendationInput`
 
@@ -116,6 +134,13 @@
   ticketType: "couple", // single | couple | family | group
   peopleCount: 2,
   ages: [21, 22],
+  selectedMovieId: "m001",
+  selectedScheduleId: "s001",
+  needAccessibility: false,
+  passengers: [
+    { name: "Alice", age: 21 },
+    { name: "Bob", age: 22 }
+  ],
   preferences: {
     preferCenter: true,
     preferBack: true,
@@ -131,6 +156,8 @@
 - `couple`：情侣票
 - `family`：家庭票
 - `group`：团体票
+- 可以通过 `passengers` 自动判断是否有儿童或老人
+- 建议把“儿童/老人判断”放在年龄规则里，而不是额外拆出很多票种
 
 如果做表单简化版，也至少要保留 `ticketType + peopleCount + ages`。
 
@@ -141,7 +168,9 @@
   recommendedSeatIds: ["F-8", "F-9"],
   fallbackSeatIds: ["G-8", "G-9"],
   score: "excellent", // excellent | good | normal
-  reasons: ["中后排视角更舒适", "座位连续且靠近中心区域"]
+  reasons: ["中后排视角更舒适", "座位连续且靠近中心区域"],
+  recommendedArea: "middle-back",
+  warnings: []
 }
 ```
 
@@ -153,10 +182,24 @@
   userId: "u001",
   scheduleId: "s001",
   seatIds: ["F-8", "F-9"],
+  ticketType: "couple",
+  peopleCount: 2,
+  totalPrice: 116,
   status: "booked", // booked | cancelled | purchased | refunded
-  createdAt: 1780000000000
+  paymentStatus: "pending", // pending | paid | closed
+  paymentMethod: "mock", // mock
+  createdAt: 1780000000000,
+  updatedAt: 1780000005000,
+  expiresAt: 1780000900000
 }
 ```
+
+说明：
+
+- `booked` 对应“已预订 / 已锁票”
+- `purchased` 对应“假支付成功后完成购票”
+- `expiresAt` 用于预订超时自动释放座位
+- 不需要接真实支付，做一个假支付确认页或弹窗即可
 
 ## 热度 `heatMapData`
 
@@ -183,7 +226,48 @@ smartcinema_halls
 smartcinema_orders
 smartcinema_seat_state
 smartcinema_current_user
+smartcinema_heat_map
 ```
+
+## 推荐的锁票机制
+
+为了让“预订”和“支付”流程更像真实系统，建议统一成下面这套简单机制：
+
+1. 用户点“预订”
+   - 创建 `order`
+   - 对应座位 `status` 变成 `reserved`
+   - 写入 `userId / orderId / lockedUntil`
+
+2. 用户点“支付”
+   - 不接真实支付
+   - 可以弹出一个假支付面板
+   - 点击“确认支付”后，把 `order.paymentStatus` 置为 `paid`
+   - 把座位 `status` 从 `reserved` 改成 `sold`
+
+3. 用户取消或超时
+   - 把 `order.status` 改成 `cancelled`
+   - 把座位恢复成 `available`
+   - 清空 `userId / orderId / lockedUntil`
+
+## 页面与权限建议
+
+### 普通用户
+
+- 登录 / 注册
+- 选择电影和场次
+- 查看余票
+- 智能推荐
+- 手动选座
+- 预订 / 假支付 / 退票
+- 查看“我的订单”
+
+### 管理员
+
+- 登录后台
+- 查看全部订单
+- 查看全部场次余票
+- 查看热度统计
+- 必要时调整订单或座位状态
 
 ## 当前接口边界
 
@@ -206,3 +290,4 @@ smartcinema_current_user
 - 订单信息
 - 当前场次座位状态
 - 热度数据
+- 锁票超时信息

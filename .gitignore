@@ -1,6 +1,8 @@
 # OS / editor
 .DS_Store
 Thumbs.db
+.vs/
+~$*.docx
 
 # Local output
 dist/
