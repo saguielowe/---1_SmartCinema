@@ -17,7 +17,7 @@
   username: "testUser",
   password: "123456",
   role: "user", // user | admin
-  nickname: "子嘉",
+  nickname: "abc",
   createdAt: 1780000000000,
   accessibilityMode: {
     largeText: false,
@@ -77,20 +77,24 @@
 ```js
 {
   hallId: "hall-imax",
-  hallName: "IMAX厅",
-  hallType: "imax", // small | medium | large | imax
-  capacity: 120,
-  rowCount: 8,
+  hallName: "中厅",
+  hallType: "medium", // small | medium | large
+  capacity: 200,
+  rowCount: 10,
   screenLabel: "银幕",
   rows: [
-    { rowLabel: "A", pattern: "XXSSSSAASSSSXX", offsetX: -8, curveDepth: 8 },
-    { rowLabel: "B", pattern: "XSSSSSAASSSSSX", offsetX: -4, curveDepth: 8 },
-    { rowLabel: "C", pattern: "SSSSSSAASSSS", offsetX: 0, curveDepth: 8 } // 居中布局，每排座位数允许不一样。
+    { rowLabel: "A", pattern: "SSSSSSSSSSAASSSSSSSSSS", offsetX: -8, curveDepth: 8 },
+    { rowLabel: "B", pattern: "SSSSSSSSSSAASSSSSSSSSS", offsetX: -4, curveDepth: 7 },
+    { rowLabel: "C", pattern: "SSSSSSSSSSAASSSSSSSSSS", offsetX: 0, curveDepth: 6 }
   ]
 }
 ```
 
-### `pattern` 字符约定
+### 影厅规模与 `pattern` 约定
+
+- 我们先准备三个预设影厅，座位总数分别为约 100、200、300，避免漏掉题目的三种规模要求；影厅名字和主题可以自由定，不必机械地叫小/中/大。
+- 每个预设厅保持 10 排，但每排不要求相同。`capacity` 等于所有排里 `S/W` 的总数。
+- `pattern` 里的 `A` 和 `X` 不计入座位数。可以用它们做中间空位、斜走道、左右不对称或特殊座位区。
 
 - `S`：普通座位
 - `A`：过道
@@ -102,9 +106,9 @@
 ### 渲染字段说明
 
 - `rowLabel`：排号
-- `pattern`：这一排的结构
+- `pattern`：这一排的结构；座位编号按该排第几个 `S/W` 计算，不因过道或空缺跳号
 - `offsetX`：整排横向偏移，帮助做斜走道或左右不对称
-- `curveDepth`：这一排的弯曲程度，值越大弧度越明显
+- `curveDepth`：这一排的弯曲程度，值越大弧度越明显；通常越靠前弧度越大
 
 ## 座位状态 `seatState`
 

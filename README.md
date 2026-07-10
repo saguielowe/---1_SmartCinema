@@ -16,8 +16,11 @@
 - [分工草案](./docs/task-assignment.md)
 - [字段设计](./docs/data-schema.md)
 - [功能清单](./docs/feature-checklist.md)
+- [用户操作流程](./docs/user-flow.md)
+- [购票与订单约定](./docs/booking-flow.md)
 - [Git 协作约定](./docs/collaboration.md)
-- [AI 使用说明草稿](./docs/ai-usage-report.md)
+- [各模块进度记录](./docs/contributions/README.md)
+- [AI 协同开发记录](./docs/ai-usage-report.md)
 
 ## 目录说明
 

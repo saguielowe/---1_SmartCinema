@@ -9,6 +9,7 @@
 3. [字段设计](../docs/data-schema.md)
 4. [购票与订单流程](../docs/booking-flow.md)
 5. [Git 协作约定](../docs/collaboration.md)
+6. [用户操作流程](../docs/user-flow.md)
 
 ## 怎么理解这套结构
 

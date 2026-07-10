@@ -1,5 +1,5 @@
-// B: 负责推荐规则、连续座位搜索和推荐理由。
-// 当前先放一个最小占位实现，保证 A / C / D 有固定输入输出可接。
+// 这是推荐模块的占位样例，只用于固定 A / C / D 对接时的输入输出。
+// 认领后需要自行实现连续座位搜索、年龄规则、推荐理由和评分。
 
 export function getDefaultRecommendation() {
   return {
@@ -11,6 +11,6 @@ export function getDefaultRecommendation() {
 }
 
 export function recommendSeats() {
-  // TODO: 后续在这里接入年龄限制、票种规则和连续座位搜索。
+  // TODO: 认领后在这里接入年龄限制、票种规则和连续座位搜索。
   return getDefaultRecommendation();
 }

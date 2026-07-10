@@ -1,5 +1,5 @@
-// C: 负责登录状态、订单、LocalStorage 和热度数据。
-// 当前先提供一个最小状态容器，避免 A / B / D 直接互相读写全局变量。
+// 这是状态模块的占位样例，避免其他模块直接互相读写全局变量。
+// 认领后需要自行实现 LocalStorage、订单、用户认证和热度数据。
 
 export function createStore(initialState) {
   const state = {
