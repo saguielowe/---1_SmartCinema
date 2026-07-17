@@ -78,7 +78,7 @@
 
 ---
 
-### 1.4 座位状态（导出常量 + 生成函数）
+### 1.4 座位状态（导出函数 + 导出常量）
 
 #### `generateSeatState(scheduleId, hall)` → `{Array<object>}`
 **函数签名：**
@@ -87,12 +87,32 @@ generateSeatState(scheduleId: string, hall: object): Array<seatState>
 ```
 - **scheduleId**：场次 ID（如 `"s001"`）
 - **hall**：影厅对象，需包含 `rows` 数组及每行的 `pattern`
-- **返回值**：该影厅所有座位的初始状态数组。85% 概率为 `available`，15% 概率为 `sold`（确定性 hash，同输入反复得到相同结果）
+- **返回值**：该影厅所有座位的初始状态数组。85% 概率为 `available`，15% 概率为 `sold`（基于 scheduleId+seatId 的确定性 hash，同输入反复得到相同结果）
 - **座位 ID 生成规则**：遍历 pattern，仅 S/W 计入编号，A/X 跳过。例如 A 排第 3 个 S → `"A-3"`
 - **用途**：`store.js` 初始化 LocalStorage 时，为每个 scheduleId 批量生成初始 seatState
 
+#### `generateAllSeatStates()` → `{Object<string, Array<object>>}`
+**函数签名：**
+```
+generateAllSeatStates(): Object<string, Array<seatState>>
+```
+- **无参数**
+- **返回值**：键为 scheduleId（`"s001"` ~ `"s012"`），值为该场次所有座位的 seatState 数组
+- **内部逻辑**：遍历 `schedulesMock`，通过 `getHallById()` 获取对应 hall，对每个场次调用 `generateSeatState()`
+- **用途**：批量预生成全部 12 个场次的座位状态
+
+#### `allSeatStates` → `{Object<string, Array<object>>}`
+预生成的常量，`generateAllSeatStates()` 的调用结果。包含 s001~s012 全部场次的完整座位状态。
+
+**数据量统计：**
+| 场次 | 影厅 | 座位数 | 预置 sold 数（约 15%）|
+|------|------|--------|----------------------|
+| s001, s004, s008, s012 | hall-large | 310 | ~47 |
+| s002, s005, s006, s010, s011 | hall-medium | 210 | ~32 |
+| s003, s007, s009 | hall-small | 104 | ~16 |
+
 #### `seatStateMock` → `{Array<object>}`
-向后兼容引用：`generateSeatState("s001", hallLarge)` 的结果，供 `app.js` 初始加载。
+向后兼容引用：`allSeatStates["s001"]`，对应 s001 场次（星际穿越·巨幕厅，310 座）。供 `app.js` 初始加载使用。
 
 ---
 
@@ -109,7 +129,7 @@ generateSeatState(scheduleId: string, hall: object): Array<seatState>
 
 ---
 
-### 1.6 热度数据（导出常量 + 生成函数）
+### 1.6 热度数据（导出函数 + 导出常量）
 
 #### `generateHeatMap(scheduleId, hall)` → `{Array<object>}`
 **函数签名：**
@@ -120,12 +140,25 @@ generateHeatMap(scheduleId: string, hall: object): Array<heatMapData>
 - **hall**：影厅对象
 - **返回值**：每个座位的初始热度数据（seatId + heatScore 0~1）
 - **热度分布逻辑**：
-  - 中心排（D-G，即 ri 在 rowCount*0.3 ~ rowCount*0.7）：heatScore 0.6~0.9，越靠近该排中心列越高
-  - 边缘排（A-C 和 H-J）：heatScore 0.1~0.4
+  - 中心排（D-G 排，即 ri 在 rowCount*0.3 ~ rowCount*0.7）：heatScore 0.6~0.9，越靠近该排中心列越高
+  - 边缘排（A-C 和 H-J）：heatScore 0.1~0.4，带微量随机扰动
 - **用途**：`store.js` 初始化时为每个 scheduleId 生成初始热度
 
+#### `generateAllHeatMaps()` → `{Object<string, Array<object>>}`
+**函数签名：**
+```
+generateAllHeatMaps(): Object<string, Array<heatMapData>>
+```
+- **无参数**
+- **返回值**：键为 scheduleId（`"s001"` ~ `"s012"`），值为该场次所有座位的 heatMapData 数组
+- **内部逻辑**：遍历 `schedulesMock`，通过 `getHallById()` 获取对应 hall，对每个场次调用 `generateHeatMap()`
+- **用途**：批量预生成全部 12 个场次的初始热度数据
+
+#### `allHeatMaps` → `{Object<string, Array<object>>}`
+预生成的常量，`generateAllHeatMaps()` 的调用结果。包含 s001~s012 全部场次的完整热度数据。
+
 #### `heatMapMock` → `{Array<object>}`
-`generateHeatMap("s001", hallLarge)` 的预计算结果，供初始演示。
+向后兼容引用：`allHeatMaps["s001"]`，对应 s001 场次（星际穿越·巨幕厅）。供初始演示。
 
 ---
 
@@ -162,13 +195,19 @@ generateHeatMap(scheduleId: string, hall: object): Array<heatMapData>
 
 ---
 
-### 1.9 内部工具函数
+### 1.9 内部工具函数（不导出）
 
 #### `simpleHash(str)` → `{number}`
-**（内部函数，不导出）**
 - 朴素字符串 hash，返回 0~1 浮点数
-- 用于 `generateSeatState` 中确定性决定座位是否为 `sold`
-- 算法：`(h * 31 + charCode) % 1000 / 1000`
+- 用于 `generateSeatState` 中确定性决定每个 (scheduleId, seatId) 组合是否为 `sold`
+- 算法：`(h * 31 + charCode) & 0x7fffffff` 取低 31 位后 `% 1000 / 1000`
+- **确定性保证**：同一输入始终得到同一输出，确保跨页面刷新后 mock 数据一致
+
+#### `getHallById(hallId)` → `{object|undefined}`
+- 根据影厅 ID 字符串在 `hallsMock` 中查找对应影厅对象
+- 用于 `generateAllSeatStates()` 和 `generateAllHeatMaps()` 中 schedule.hallId → hall 的映射
+- 参数：`hallId` — 如 `"hall-small"`、`"hall-medium"`、`"hall-large"`
+- 返回值：匹配的 hall 对象，未找到返回 `undefined`
 
 ---
 
@@ -240,3 +279,4 @@ generateHeatMap(scheduleId: string, hall: object): Array<heatMapData>
 | 日期 | 修改内容 | 修改人 |
 |------|----------|--------|
 | 2026-07-17 | 初始创建，记录 mock-data.js 所有导出和 store.js 规划接口 | C |
+| 2026-07-17 | 更新 A-4（allSeatStates / generateAllSeatStates / getHallById）和 A-6（allHeatMaps / generateAllHeatMaps） | C |

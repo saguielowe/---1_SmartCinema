@@ -328,25 +328,39 @@ export const schedulesMock = [
 // =============================================================================
 
 /**
+ * 根据 hallId 查找对应的影厅对象。
+ * 用于 schedule → hall 的映射。
+ *
+ * @param {string} hallId - 影厅 ID（如 "hall-small"）
+ * @returns {object|undefined} 影厅对象，未找到返回 undefined
+ */
+function getHallById(hallId) {
+  return hallsMock.find((h) => h.hallId === hallId);
+}
+
+/**
  * 为指定 scheduleId 和 hall 生成全部座位的初始状态。
  * 绝大部分为 available，少量随机标记为 sold 以便演示。
- * 基于影厅 pattern 中的 S/W 生成 seatId（A → X → 不计入编号）。
+ * 基于影厅 pattern 中的 S/W 生成 seatId（A/X 不计入编号）。
  *
- * @param {string} scheduleId - 场次 ID
- * @param {object} hall - 影厅对象
- * @returns {Array} seatState 数组
+ * 每个 scheduleId 独立使用确定性的 pseudo-random hash 决定哪些座位为 sold，
+ * 同一个 (scheduleId, seatId) 组合每次调用返回相同的状态。
+ *
+ * @param {string} scheduleId - 场次 ID（如 "s001"）
+ * @param {object} hall - 影厅对象，需包含 rows 数组
+ * @returns {Array<object>} seatState 数组，每项结构见 data-schema.md
  */
 export function generateSeatState(scheduleId, hall) {
   const states = [];
   const soldProbability = 0.15; // 15% 座位预置为已售，用于演示
 
   for (const row of hall.rows) {
-    let seatNumber = 0; // 当前排座位号（仅 S 和 W 递增）
+    let seatNumber = 0; // 当前排座位号（仅 S 和 W 递增，A/X 跳过）
     for (const ch of row.pattern) {
       if (ch === "S" || ch === "W") {
         seatNumber++;
         const seatId = `${row.rowLabel}-${seatNumber}`;
-        // 使用简单的伪随机决定是否标记为 sold（基于 scheduleId + seatId 的确定性 hash）
+        // 基于 scheduleId+seatId 的确定性 hash，同输入始终得到相同结果
         const hash = simpleHash(`${scheduleId}-${seatId}`);
         const isSold = hash < soldProbability;
 
@@ -366,8 +380,25 @@ export function generateSeatState(scheduleId, hall) {
 }
 
 /**
+ * 生成全部 12 个场次 × 对应影厅 的完整座位状态。
+ * 遍历 schedulesMock，为每个场次按其所分配的 hallId 生成全部座位状态。
+ *
+ * @returns {Object<string, Array<object>>} 键为 scheduleId，值为 seatState 数组
+ */
+export function generateAllSeatStates() {
+  const allStates = {};
+  for (const schedule of schedulesMock) {
+    const hall = getHallById(schedule.hallId);
+    if (hall) {
+      allStates[schedule.scheduleId] = generateSeatState(schedule.scheduleId, hall);
+    }
+  }
+  return allStates;
+}
+
+/**
  * 简易字符串 hash 函数，返回值 0~1。
- * 用于确定性生成 mock seatState，同输入始终得到相同结果。
+ * 用于确定性生成 mock 数据，同输入始终得到相同结果。
  *
  * @param {string} str - 输入字符串
  * @returns {number} 0~1 之间的浮点数
@@ -381,10 +412,16 @@ function simpleHash(str) {
 }
 
 /**
+ * 所有场次的完整座位状态（预生成，避免每次启动重复计算）。
+ * 键为 scheduleId（s001~s012），值为对应 seatState 数组。
+ */
+export const allSeatStates = generateAllSeatStates();
+
+/**
  * 保持向后兼容：seatStateMock 对应 s001（星际穿越·巨幕厅）。
  * 供 app.js 初始加载使用。
  */
-export const seatStateMock = generateSeatState("s001", hallLarge);
+export const seatStateMock = allSeatStates["s001"] || generateSeatState("s001", hallLarge);
 
 // =============================================================================
 // 五、用户 mock 数据
@@ -493,9 +530,33 @@ export function generateHeatMap(scheduleId, hall) {
 }
 
 /**
- * 预生成 s001 场次的热度数据（供初始演示）。
+ * 生成全部 12 个场次 × 对应影厅 的完整初始热度数据。
+ * 遍历 schedulesMock，为每个场次按其所分配的 hallId 生成每个座位的 heatScore。
+ *
+ * @returns {Object<string, Array<object>>} 键为 scheduleId，值为 heatMapData 数组
  */
-export const heatMapMock = generateHeatMap("s001", hallLarge);
+export function generateAllHeatMaps() {
+  const allMaps = {};
+  for (const schedule of schedulesMock) {
+    const hall = getHallById(schedule.hallId);
+    if (hall) {
+      allMaps[schedule.scheduleId] = generateHeatMap(schedule.scheduleId, hall);
+    }
+  }
+  return allMaps;
+}
+
+/**
+ * 所有场次的完整热度数据（预生成，避免每次启动重复计算）。
+ * 键为 scheduleId（s001~s012），值为 heatMapData 数组。
+ */
+export const allHeatMaps = generateAllHeatMaps();
+
+/**
+ * 保持向后兼容：heatMapMock 对应 s001（星际穿越·巨幕厅）。
+ * 供 app.js 初始加载使用。
+ */
+export const heatMapMock = allHeatMaps["s001"] || generateHeatMap("s001", hallLarge);
 
 // =============================================================================
 // 七、订单 mock 数据（初始为空，由用户操作动态创建）
@@ -567,11 +628,7 @@ export const allMockData = {
   schedules: schedulesMock,
   users: usersMock,
   orders: ordersMock,
-  // seatState 和 heatMap 按场次动态生成，此处提供 s001 的初始值
-  seatStates: {
-    s001: seatStateMock,
-  },
-  heatMaps: {
-    s001: heatMapMock,
-  },
+  // 所有 12 个场次 × 对应影厅的完整座位状态和热度数据（预生成）
+  seatStates: allSeatStates,
+  heatMaps: allHeatMaps,
 };
