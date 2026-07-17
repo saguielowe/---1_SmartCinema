@@ -182,16 +182,16 @@ generateAllHeatMaps(): Object<string, Array<heatMapData>>
 一次性获取所有初始 mock 数据的便捷对象：
 ```js
 {
-  halls,         // hallsMock
-  movies,        // moviesMock
-  schedules,     // schedulesMock
-  users,         // usersMock
-  orders,        // ordersMock
-  seatStates,    // { s001: seatStateMock }，后续按需补充其他场次
-  heatMaps,      // { s001: heatMapMock }
+  halls,         // hallsMock（3 套影厅）
+  movies,        // moviesMock（5 部电影）
+  schedules,     // schedulesMock（12 个场次）
+  users,         // usersMock（2 个预设用户）
+  orders,        // ordersMock（3 条示例订单）
+  seatStates,    // allSeatStates — 完整 12 场次座位状态
+  heatMaps,      // allHeatMaps — 完整 12 场次热度数据
 }
 ```
-用途：`store.js` 中 `initMockData()` → 遍历写入 LocalStorage。
+用途：`store.js` 首次运行时通过 `initStore()` 遍历写入所有 LocalStorage key。
 
 ---
 
@@ -211,54 +211,97 @@ generateAllHeatMaps(): Object<string, Array<heatMapData>>
 
 ---
 
-## 二、store.js —— 状态管理模块（规划中的接口）
+## 二、store.js —— 状态管理模块（已实现 ✓）
 
-> 注：以下为 `draft.md` 中规划的接口，将在后续开发阶段实现。完成后更新此表。
+> 状态：B-1~B-4、C-1~C-5、D-1~D-8、E-1~E-4、F-1~F-5 全部已实现。
+> 默认导出单例 `store`，`app.js` 直接 `import { store } from "./store.js"` 使用。
+> 工厂函数 `createStore(initialState?)` 也可导出，用于单元测试。
 
-### 2.1 用户模块
+### 2.0 LocalStorage 持久化层（B-1~B-4，内部函数）
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `loadFromStorage(key)` | `(key: string) → any\|null` | 读取并 JSON.parse，失败返回 null |
+| `saveToStorage(key, data)` | `(key: string, data: any) → void` | JSON.stringify 写入，失败仅 warn |
+| `removeFromStorage(key)` | `(key: string) → void` | 删除指定 key |
+| `initStore()` | `() → { isFirstRun: boolean }` | **（暴露）** 启动初始化：检查 smartcinema_users → 不存在则写入 allMockData → 加载全部到内存 → 恢复登录会话 → 恢复锁票定时器 |
+| `clearAllData()` | `() → void` | **（暴露）** 清除全部 LS 数据 + 重置内存状态 + 清理所有定时器 |
+| `persistAll()` | 内部 | 全量持久化（HALLS/MOVIES/SCHEDULES/USERS/ORDERS/SEAT_STATE/HEAT_MAP/CURRENT_USER） |
+| `persistUsers()` | 内部 | 仅持久化 USERS + CURRENT_USER |
+| `persistOrders()` | 内部 | 仅持久化 ORDERS |
+| `persistSeatStates()` | 内部 | 仅持久化 SEAT_STATE |
+| `persistHeatMaps()` | 内部 | 仅持久化 HEAT_MAP |
+
+**LS Key 常量：**
+| 常量 | Key |
+|------|-----|
+| STORAGE_KEYS.USERS | `smartcinema_users` |
+| STORAGE_KEYS.MOVIES | `smartcinema_movies` |
+| STORAGE_KEYS.SCHEDULES | `smartcinema_schedules` |
+| STORAGE_KEYS.HALLS | `smartcinema_halls` |
+| STORAGE_KEYS.ORDERS | `smartcinema_orders` |
+| STORAGE_KEYS.SEAT_STATE | `smartcinema_seat_state` |
+| STORAGE_KEYS.CURRENT_USER | `smartcinema_current_user` |
+| STORAGE_KEYS.HEAT_MAP | `smartcinema_heat_map` |
+
+### 2.1 基础数据查询（只读）
 
 | 方法签名 | 返回值 | 说明 |
 |----------|--------|------|
-| `register(username, password)` | `{ success, message }` | 注册新用户，校验用户名唯一 |
+| `getHalls()` | `hall[]` | 全部影厅列表 |
+| `getHallById(hallId)` | `hall\|undefined` | 按 ID 查影厅 |
+| `getMovies()` | `movie[]` | 全部电影列表 |
+| `getMovieById(movieId)` | `movie\|undefined` | 按 ID 查电影 |
+| `getSchedules()` | `schedule[]` | 全部场次列表 |
+| `getScheduleById(scheduleId)` | `schedule\|undefined` | 按 ID 查场次 |
+| `getSchedulesByMovie(movieId)` | `schedule[]` | 某电影的所有场次 |
+
+### 2.2 用户模块
+
+| 方法签名 | 返回值 | 说明 |
+|----------|--------|------|
+| `register(username, password)` | `{ success, message, user? }` | 注册（校验唯一 + 非空），成功自动登录 |
 | `login(username, password)` | `{ success, message, user? }` | 登录校验，写入 current_user |
-| `logout()` | `void` | 清除登录状态 |
-| `getCurrentUser()` | `user \| null` | 获取当前登录用户 |
+| `logout()` | `void` | 登出，清除 current_user |
+| `getCurrentUser()` | `user\|null` | 当前登录用户 |
 | `isLoggedIn()` | `boolean` | 是否已登录 |
-| `isAdmin()` | `boolean` | 当前用户是否为管理员 |
+| `isAdmin()` | `boolean` | 是否管理员 |
 
-### 2.2 订单模块
-
-| 方法签名 | 返回值 | 说明 |
-|----------|--------|------|
-| `createOrder({ scheduleId, seatIds, ticketType, peopleCount })` | `order` | 创建订单 + 锁票 |
-| `payOrder(orderId)` | `{ success, message }` | 模拟支付 |
-| `cancelOrder(orderId)` | `{ success, message }` | 取消预订，释放座位 |
-| `refundOrder(orderId)` | `{ success, message }` | 退票，释放座位 |
-| `getOrders(filter?)` | `order[]` | 查询订单列表（按 userId 或全部） |
-| `getOrderById(orderId)` | `order \| null` | 单条订单查询 |
-
-### 2.3 座位状态模块
+### 2.3 订单模块
 
 | 方法签名 | 返回值 | 说明 |
 |----------|--------|------|
-| `getSeatStateBySchedule(scheduleId)` | `seatState[]` | 查询某场次所有座位状态 |
-| `getRemainingSeats(scheduleId)` | `number` | 计算可用座位数 |
-| `updateSeatStatus(scheduleId, seatIds, newStatus)` | `void` | 批量更新座位状态 |
+| `createOrder({ scheduleId, seatIds, ticketType, peopleCount })` | `{ success, message, order? }` | 创建订单 + 锁票（15 分钟超时）。校验：需登录 + 座位均 available + 场次存在 |
+| `payOrder(orderId)` | `{ success, message }` | 模拟支付：booked → purchased/paid，座位 reserved → sold |
+| `cancelOrder(orderId)` | `{ success, message }` | 取消预订：booked → cancelled/closed，释放座位 |
+| `refundOrder(orderId)` | `{ success, message }` | 退票：purchased → refunded/closed，释放座位 |
+| `getOrders(filter?)` | `order[]` | 查询订单（普通用户仅看自己；管理员全量）。filter: { status?, scheduleId? } |
+| `getOrderById(orderId)` | `order\|null` | 单条订单查询 |
 
-### 2.4 热度数据模块
+### 2.4 座位状态模块
 
 | 方法签名 | 返回值 | 说明 |
 |----------|--------|------|
-| `getHeatMapBySchedule(scheduleId)` | `heatMapData[]` | 查询某场次热度数据 |
+| `getSeatStateBySchedule(scheduleId)` | `seatState[]` | 某场次全部座位状态 |
+| `getRemainingSeats(scheduleId)` | `number` | 实时计算 available 座位数 |
+| `updateSeatStatus(scheduleId, seatIds, newStatus)` | `void` | 批量更新座位状态 + 持久化 |
+
+### 2.5 热度数据模块
+
+| 方法签名 | 返回值 | 说明 |
+|----------|--------|------|
+| `getHeatMapBySchedule(scheduleId)` | `heatMapData[]` | 某场次热度数据 |
 | `getHeatMapByMovie(movieId)` | `heatMapData[]` | 聚合某电影所有场次热度 |
-| `updateHeatScore(scheduleId, seatId, delta)` | `void` | 更新单个座位热度 |
+| `updateHeatScore(scheduleId, seatId, delta)` | `void` | 更新单个座位热度 ±delta（钳位 0~1）+ 持久化 |
 
-### 2.5 初始化与工具
+### 2.6 锁票超时管理（内部自动）
 
-| 方法签名 | 返回值 | 说明 |
-|----------|--------|------|
-| `initStore()` | `void` | 应用启动时初始化 LocalStorage 和内存状态 |
-| `clearAllData()` | `void` | 清除所有 LocalStorage 数据（调试用） |
+| 机制 | 说明 |
+|------|------|
+| `scheduleOrderTimeout(orderId, delay)` | 为 booked 订单设置 setTimeout，超时自动取消 |
+| `clearOrderTimer(orderId)` | 支付/取消时清除定时器 |
+| `restoreLockTimers()` | `initStore()` 时恢复所有未过期订单的定时器，已过期的立即取消 |
+| `cancelOrderInternal(orderId, isRefund)` | 内部共享取消逻辑（取消/退票/超时均调用），含座位释放 + 热度递减 |
 
 ---
 
@@ -280,3 +323,5 @@ generateAllHeatMaps(): Object<string, Array<heatMapData>>
 |------|----------|--------|
 | 2026-07-17 | 初始创建，记录 mock-data.js 所有导出和 store.js 规划接口 | C |
 | 2026-07-17 | 更新 A-4（allSeatStates / generateAllSeatStates / getHallById）和 A-6（allHeatMaps / generateAllHeatMaps） | C |
+| 2026-07-17 | 重构 store.js（B-1~B-4 LocalStorage 持久化层）：loadFromStorage / saveToStorage / initStore / clearAllData / persist* | C |
+| 2026-07-17 | store.js 实现 C/D/E/F 全部接口（注册登录、订单 CRUD+锁票、座位状态、热度数据、超时自动取消） | C |
