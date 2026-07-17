@@ -305,7 +305,36 @@ generateAllHeatMaps(): Object<string, Array<heatMapData>>
 
 ---
 
-## 三、状态流转约定
+## 三、test-store.html —— visual cargo test 面板
+
+> 位于 `03_源码/test-store.html`，必须通过 HTTP 服务器访问（`http://localhost:8080/test-store.html`），
+> 不可直接双击打开（ES module `import` 在 `file://` 协议下被 CORS 阻止）。
+
+### 3.1 面板布局
+
+| 区域 | 测试覆盖 |
+|------|---------|
+| 1. Init & LS | `initStore()` / `clearAllData()` / `checkLS()` |
+| 2. Users (C-1~5) | `register` / `login` / `logout` / `getCurrentUser` + Admin Login |
+| 3. Orders (D-1~8) | 全流程按钮：Create/Pay/Cancel/Refund/Force Expire/Filter/Verify Interfaces/Full Flow Auto Test |
+| 4. Heat (F-1~5) | Show Heat / Overview / Update Heat |
+
+### 3.2 D 模块专项测试按钮
+
+| 按钮 | 验证项 | 日志输出内容 |
+|------|--------|-------------|
+| D-1/2: Create Order + Lock | `createOrder` 创建订单 + `seatState` 锁票验证 | orderId / totalPrice / expires / seats before→after 状态变化 |
+| D-3: Pay | `payOrder` 模拟支付 + 座位 reserved→sold | paymentStatus 变化 + 座位状态变化 |
+| D-4: Cancel | `cancelOrder` 取消预订 + 座位释放 | cancelled/closed + seats→available |
+| D-5: Refund | `refundOrder` 退票 + 已售座位释放 | refunded/closed + seats→available |
+| D-6: Force Expire All Booked | 手动触发过期（模拟超时） | 批量 cancelOrder 结果 |
+| D-7: All Orders / Apply Filter | `getOrders(filter)` 按状态筛选 | 筛选结果计数 |
+| D-8: Verify All Interfaces | 14 个接口存在性检查 | OK/MISSING/INTEGRATED 清单 |
+| Run Full Flow | 创建→支付→验证→退票→验证 5 步自动化 | 每步成功/失败 + 座位状态变化 |
+
+---
+
+## 四、状态流转约定
 
 | 用户操作 | 调用的 Store 方法 | 订单状态变化 | 座位状态变化 |
 |----------|-------------------|-------------|-------------|
@@ -317,7 +346,7 @@ generateAllHeatMaps(): Object<string, Array<heatMapData>>
 
 ---
 
-## 四、修改日志
+## 五、修改日志
 
 | 日期 | 修改内容 | 修改人 |
 |------|----------|--------|

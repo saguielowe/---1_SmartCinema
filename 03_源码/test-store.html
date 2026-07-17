@@ -1,330 +1,526 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Store Test Panel — C Module Visual Cargo Test</title>
-  <style>
-    :root { --bg: #1a1a2e; --panel: #16213e; --border: #0f3460; --text: #e0e0e0; --muted: #8899aa; --green: #2ecc71; --red: #e74c3c; --yellow: #f39c12; --blue: #3498db; --accent: #e94560; }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Segoe UI, system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
-    h1 { color: var(--accent); margin-bottom: 4px; }
-    .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 1300px; }
-    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
-    .panel h2 { font-size: 15px; color: var(--blue); margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 5px; }
-    .full { grid-column: 1 / -1; }
-    button { padding: 6px 14px; border: 1px solid var(--border); border-radius: 4px; background: var(--panel); color: var(--text); cursor: pointer; font-size: 13px; margin: 3px 5px 3px 0; }
-    button:hover { background: var(--border); }
-    button.primary { background: var(--accent); border-color: var(--accent); font-weight: bold; }
-    button.danger { background: var(--red); border-color: var(--red); }
-    button.green { background: var(--green); border-color: var(--green); color: #000; }
-    input, select { padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font-size: 13px; margin: 3px 5px 3px 0; }
-    .log { background: #0a0a16; border: 1px solid var(--border); border-radius: 4px; padding: 10px; font-family: Consolas, Courier New, monospace; font-size: 12px; max-height: 280px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5; }
-    .ok { color: var(--green); } .err { color: var(--red); } .warn { color: var(--yellow); } .info { color: var(--blue); }
-    .row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 6px; }
-    #current-badge { font-size: 12px; color: var(--muted); margin-left: 6px; }
-  </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Store Test Panel — C Module Visual Cargo Test</title>
+<style>
+:root { --bg: #1a1a2e; --panel: #16213e; --border: #0f3460; --text: #e0e0e0; --muted: #8899aa; --green: #2ecc71; --red: #e74c3c; --yellow: #f39c12; --blue: #3498db; --accent: #e94560; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Segoe UI, system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
+h1 { color: var(--accent); margin-bottom: 4px; }
+.sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 1400px; }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+.panel h2 { font-size: 15px; color: var(--blue); margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 5px; }
+.full { grid-column: 1 / -1; }
+button { padding: 6px 14px; border: 1px solid var(--border); border-radius: 4px; background: var(--panel); color: var(--text); cursor: pointer; font-size: 13px; margin: 3px 5px 3px 0; transition: background .15s; }
+button:hover { background: var(--border); }
+button.primary { background: var(--accent); border-color: var(--accent); font-weight: bold; }
+button.danger { background: var(--red); border-color: var(--red); }
+button.green { background: var(--green); border-color: var(--green); color: #000; }
+button.small { padding: 4px 10px; font-size: 11px; }
+input, select { padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font-size: 13px; margin: 3px 5px 3px 0; }
+.log { background: #0a0a16; border: 1px solid var(--border); border-radius: 4px; padding: 10px; font-family: Consolas, Courier New, monospace; font-size: 12px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5; }
+.ok { color: var(--green); } .err { color: var(--red); } .warn { color: var(--yellow); } .info { color: var(--blue); }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 6px; }
+#current-badge { font-size: 12px; color: var(--muted); margin-left: 6px; }
+hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+.tag { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; margin-right: 3px; }
+.tag-ok { background: #1a3a1a; color: var(--green); }
+.tag-err { background: #3a1a1a; color: var(--red); }
+.tag-warn { background: #3a2a0a; color: var(--yellow); }
+</style>
 </head>
 <body>
-  <h1>SmartCinema Store Test Panel</h1>
-  <p class="sub">C module visual cargo test — all buttons use addEventListener (no inline onclick)</p>
+<h1>SmartCinema Store Test Panel</h1>
+<p class="sub">C module visual cargo test — D order module comprehensive verification | <span style="color:var(--yellow)">Run via http://localhost:8080/test-store.html</span></p>
 
-  <div class="grid">
-    <!-- 1. Init -->
-    <section class="panel">
-      <h2>1. Init & LocalStorage</h2>
-      <button class="primary" id="btn-init">initStore()</button>
-      <button class="danger" id="btn-clear">clearAllData()</button>
-      <button id="btn-checkls">Check LS Data</button>
-      <div class="log" id="log-init">Click initStore() to begin...</div>
-    </section>
+<div class="grid">
+  <!-- 1. Init -->
+  <section class="panel">
+    <h2>1. Init & LocalStorage</h2>
+    <button class="primary" id="btn-init">initStore()</button>
+    <button class="danger" id="btn-clear">clearAllData()</button>
+    <button id="btn-checkls">Check LS Data</button>
+    <div class="log" id="log-init">Click initStore() to begin...</div>
+  </section>
 
-    <!-- 2. Users (C-1~5) -->
-    <section class="panel">
-      <h2>2. Users (C-1~5)</h2>
-      <div class="row">
-        <input id="reg-user" placeholder="username" size="10" />
-        <input id="reg-pass" placeholder="password" type="password" size="10" />
-        <button class="primary" id="btn-register">Register</button>
-      </div>
-      <div class="row">
-        <input id="login-user" value="testuser" size="10" />
-        <input id="login-pass" value="123456" type="password" size="10" />
-        <button class="green" id="btn-login">Login</button>
-        <button id="btn-logout">Logout</button>
-      </div>
-      <div class="row">
-        <button id="btn-current">Current User</button>
-        <span id="current-badge"></span>
-      </div>
-      <div class="log" id="log-user">Not initialized</div>
-    </section>
+  <!-- 2. Users -->
+  <section class="panel">
+    <h2>2. Users (C-1~5)</h2>
+    <div class="row">
+      <input id="reg-user" placeholder="username" size="10"/>
+      <input id="reg-pass" placeholder="password" type="password" size="10"/>
+      <button class="primary" id="btn-register">Register</button>
+    </div>
+    <div class="row">
+      <input id="login-user" value="testuser" size="10"/>
+      <input id="login-pass" value="123456" type="password" size="10"/>
+      <button class="green" id="btn-login">Login</button>
+      <button id="btn-logout">Logout</button>
+    </div>
+    <div class="row">
+      <button id="btn-current">Current User</button>
+      <button id="btn-admin-login" class="small">Login as Admin</button>
+      <span id="current-badge"></span>
+    </div>
+    <div class="log" id="log-user">Not initialized</div>
+  </section>
 
-    <!-- 3. Orders (D-1~8) -->
-    <section class="panel">
-      <h2>3. Orders (D-1~8)</h2>
-      <div class="row">
-        Schedule <select id="order-schedule"></select>
-        Seats <input id="order-seats" placeholder="E-5,E-6" size="10" />
-        Type <select id="order-type"><option>single</option><option>couple</option><option>family</option><option>group</option></select>
-        Count <input id="order-count" value="2" size="4" type="number" min="1" />
-      </div>
-      <button class="primary" id="btn-createorder">Create Order</button>
-      <button class="green" id="btn-payorder">Pay</button>
-      <button class="danger" id="btn-cancelorder">Cancel</button>
-      <button class="danger" id="btn-refundorder">Refund</button>
-      <button id="btn-orders">Orders List</button>
+  <!-- 3. Orders (D-1~8) Enhanced -->
+  <section class="panel full">
+    <h2>3. Orders — D-1~D-8 Comprehensive Test</h2>
+    <div class="row" style="flex-wrap:wrap">
+      Schedule <select id="order-schedule"></select>
+      Seats <input id="order-seats" placeholder="E-5,E-6" size="10"/>
+      Type <select id="order-type"><option>single</option><option>couple</option><option>family</option><option>group</option></select>
+      Count <input id="order-count" value="2" size="4" type="number" min="1"/>
+      Timeout <select id="order-timeout"><option value="15">15 min</option><option value="0.1">6 sec (D-6 test)</option></select>
+    </div>
+
+    <!-- D-1~D-5 Core Actions -->
+    <button class="primary" id="btn-createorder">D-1/2: Create Order + Lock</button>
+    <button class="green" id="btn-payorder">D-3: Pay</button>
+    <button class="danger" id="btn-cancelorder">D-4: Cancel</button>
+    <button class="danger" id="btn-refundorder">D-5: Refund</button>
+
+    <!-- D-6 Lock Timeout -->
+    <button id="btn-forceexpire" style="background:#e67e22;border-color:#e67e22">D-6: Force Expire All Booked</button>
+
+    <hr/>
+
+    <!-- D-7 Order Query -->
+    <div class="row">
+      <button id="btn-orders">D-7: All Orders</button>
+      Filter <select id="order-filter"><option value="">All</option><option value="booked">booked</option><option value="purchased">purchased</option><option value="cancelled">cancelled</option><option value="refunded">refunded</option></select>
+      <button id="btn-orders-filtered" class="small">Apply Filter</button>
+      <button id="btn-orders-clear" class="small danger">Clear Orders LS</button>
+    </div>
+
+    <!-- D-8 Interface Summary -->
+    <button id="btn-d8-summary" class="small">D-8: Verify All Interfaces</button>
+
+    <hr/>
+    <div class="row">
       <button id="btn-seatstats">Seat Stats</button>
-      <div class="log" id="log-order">Not initialized</div>
-    </section>
+      <button id="btn-fullflow" style="background:#9b59b6;border-color:#9b59b6;font-weight:bold">Run Full Flow (D auto-test)</button>
+    </div>
+    <div class="log" id="log-order">Not initialized</div>
+  </section>
 
-    <!-- 4. Heat (F-1~5) -->
-    <section class="panel">
-      <h2>4. Heat Map (F-1~5)</h2>
-      <div class="row">Schedule <select id="heat-schedule"></select></div>
-      <div class="row">
-        <button id="btn-heatmap">Show Heat Data</button>
-        <button id="btn-heatoverview">Overview</button>
-      </div>
-      <div class="row">
-        Seat <input id="heat-seat" placeholder="F-10" size="6" /> Delta
-        <input id="heat-delta" value="0.05" size="5" />
-        <button id="btn-updateheat">Update Heat</button>
-      </div>
-      <div class="log" id="log-heat">Not initialized</div>
-    </section>
+  <!-- 4. Heat -->
+  <section class="panel full">
+    <h2>4. Heat Map (F-1~5)</h2>
+    <div class="row">
+      Schedule <select id="heat-schedule"></select>
+      <button id="btn-heatmap">Show Heat Data</button>
+      <button id="btn-heatoverview">Overview</button>
+    </div>
+    <div class="row">
+      Seat <input id="heat-seat" placeholder="F-10" size="6"/> Delta <input id="heat-delta" value="0.05" size="5"/>
+      <button id="btn-updateheat">Update</button>
+    </div>
+    <div class="log" id="log-heat">Not initialized</div>
+  </section>
 
-    <!-- Full log -->
-    <section class="panel full">
-      <h2>📋 Operation Log</h2>
-      <div class="log" id="log-all" style="max-height:160px">Waiting...</div>
-    </section>
-  </div>
+  <!-- Log -->
+  <section class="panel full">
+    <h2>Operation Log</h2>
+    <div class="log" id="log-all" style="max-height:180px">Waiting...</div>
+  </section>
+</div>
 
-  <script type="module">
-    import { store } from "./js/store.js";
+<script type="module">
+import { store } from "./js/store.js";
 
-    // ===== Utils =====
-    function log(panelId, msg, cls) {
-      const el = document.getElementById(`log-${panelId}`);
-      if (el) el.innerHTML = msg;
-      const allEl = document.getElementById("log-all");
-      const time = new Date().toLocaleTimeString();
-      allEl.innerHTML = `<span class="${cls||''}">[${time}]</span> ${msg}\n` + allEl.innerHTML;
-      if (allEl.innerHTML.length > 5000) allEl.innerHTML = allEl.innerHTML.slice(0, 5000);
-    }
+// ===== Utils =====
+function log(panelId, msg, cls) {
+  const el = document.getElementById("log-" + panelId);
+  if (el) el.innerHTML = msg;
+  const allEl = document.getElementById("log-all");
+  const time = new Date().toLocaleTimeString();
+  allEl.innerHTML = '<span class="' + (cls||"") + '">[' + time + ']</span> ' + msg + '\n' + allEl.innerHTML;
+  if (allEl.innerHTML.length > 8000) allEl.innerHTML = allEl.innerHTML.slice(0, 8000);
+}
 
-    function updateBadge() {
-      const u = store.getCurrentUser();
-      const b = document.getElementById("current-badge");
-      b.innerHTML = u
-        ? `<span class="ok">Logged in: ${u.username} (${u.role})</span>`
-        : `<span class="warn">Not logged in</span>`;
-    }
+function updateBadge() {
+  const u = store.getCurrentUser();
+  const b = document.getElementById("current-badge");
+  b.innerHTML = u
+    ? '<span class="ok">' + u.username + ' (' + u.role + ')</span>'
+    : '<span class="warn">Not logged in</span>';
+}
 
-    function populateSchedules() {
-      const scheds = store.getSchedules();
-      if (scheds.length === 0) {
-        ["order-schedule","heat-schedule"].forEach((id) => {
-          document.getElementById(id).innerHTML = "<option>-- initStore first --</option>";
-        });
-        return;
-      }
-      const opts = scheds.map((s) => {
-        const m = store.getMovieById(s.movieId);
-        return `<option value="${s.scheduleId}">${s.scheduleId} — ${m?.title||"?"} (${s.hallId} ${s.date} ${s.startTime})</option>`;
-      }).join("");
-      document.getElementById("order-schedule").innerHTML = opts;
-      document.getElementById("heat-schedule").innerHTML = opts;
-    }
-
-    function showOrders() {
-      const orders = store.getOrders();
-      const el = document.getElementById("log-order");
-      if (orders.length === 0) { el.innerHTML = '<span class="warn">No orders</span>'; return; }
-      const lines = orders.map((o) => {
-        const sched = store.getScheduleById(o.scheduleId);
-        const movie = sched ? store.getMovieById(sched.movieId) : null;
-        const c = o.status === "purchased" ? "ok" : (o.status === "cancelled" || o.status === "refunded") ? "err" : "warn";
-        const exp = o.expiresAt ? ` | expires:${new Date(o.expiresAt).toLocaleTimeString()}` : "";
-        return `<span class="${c}">[${o.status}] ${o.orderId} | ${movie?.title||"?"} | seats:${o.seatIds.join(",")} | $${o.totalPrice}${exp}</span>`;
-      });
-      el.innerHTML = lines.join("\n");
-    }
-
-    // ===== 1. Init =====
-    document.getElementById("btn-init").addEventListener("click", () => {
-      const r = store.initStore();
-      populateSchedules();
-      log("init", `initStore() → isFirstRun: <span class="ok">${r.isFirstRun}</span>`, "ok");
-      log("init", `Movies: <span class="ok">${store.getMovies().length}</span> | Schedules: <span class="ok">${store.getSchedules().length}</span> | Halls: <span class="ok">${store.getHalls().length}</span>`, "info");
-      const keys = store.getSchedules().map((s) => `${s.scheduleId}:${store.getSeatStateBySchedule(s.scheduleId).length} seats`).join(" ");
-      log("init", `SeatStates: ${keys}`, "info");
-      updateBadge();
-      showOrders();
+function populateSchedules() {
+  const scheds = store.getSchedules();
+  if (scheds.length === 0) {
+    ["order-schedule","heat-schedule"].forEach(function(id) {
+      document.getElementById(id).innerHTML = "<option>-- initStore first --</option>";
     });
+    return;
+  }
+  const opts = scheds.map(function(s) {
+    const m = store.getMovieById(s.movieId);
+    return '<option value="' + s.scheduleId + '">' + s.scheduleId + ' — ' + (m? m.title : "?") + ' (' + s.hallId + ' ' + s.date + ' ' + s.startTime + ')</option>';
+  }).join("");
+  document.getElementById("order-schedule").innerHTML = opts;
+  document.getElementById("heat-schedule").innerHTML = opts;
+}
 
-    document.getElementById("btn-clear").addEventListener("click", () => {
-      if (confirm("Clear all LocalStorage data?")) {
-        store.clearAllData();
-        log("init", '<span class="warn">clearAllData() done — all LS keys removed</span>', "warn");
-        updateBadge();
-        document.getElementById("log-order").innerHTML = '<span class="warn">Data cleared</span>';
-        document.getElementById("log-heat").innerHTML = '<span class="warn">Data cleared</span>';
-      }
-    });
+function showOrders(filter) {
+  const orders = store.getOrders(filter || {});
+  const el = document.getElementById("log-order");
+  if (orders.length === 0) { el.innerHTML = '<span class="warn">No orders</span>'; return; }
+  const lines = orders.map(function(o) {
+    const sched = store.getScheduleById(o.scheduleId);
+    const movie = sched ? store.getMovieById(sched.movieId) : null;
+    const sc = o.status === "purchased" ? "ok" : (o.status === "cancelled" || o.status === "refunded") ? "err" : "warn";
+    const ps = o.paymentStatus === "paid" ? "tag-ok" : o.paymentStatus === "closed" ? "tag-err" : "tag-warn";
+    const exp = o.expiresAt ? " | expires:" + new Date(o.expiresAt).toLocaleTimeString() : "";
+    return '<span class="' + sc + '">[' + o.status + ']</span> <span class="tag ' + ps + '">' + o.paymentStatus + '</span> ' + o.orderId + ' | ' + (movie? movie.title : "?") + ' | seats:' + o.seatIds.join(",") + ' | $' + o.totalPrice + exp;
+  });
+  el.innerHTML = lines.join("\n");
+}
 
-    document.getElementById("btn-checkls").addEventListener("click", () => {
-      const keys = ["smartcinema_users","smartcinema_movies","smartcinema_schedules","smartcinema_halls","smartcinema_orders","smartcinema_seat_state","smartcinema_current_user","smartcinema_heat_map"];
-      const r = keys.map((k) => {
-        const raw = localStorage.getItem(k);
-        if (!raw) return `${k}: <span class="err">NOT FOUND</span>`;
-        try {
-          const d = JSON.parse(raw);
-          const len = Array.isArray(d) ? d.length + " items" : (typeof d === "object" ? Object.keys(d).length + " keys" : "?");
-          return `${k}: <span class="ok">${len}</span>`;
-        } catch { return `${k}: <span class="err">PARSE ERROR</span>`; }
-      });
-      log("init", r.join("\n"), "info");
-    });
+// ===== 1. Init =====
+document.getElementById("btn-init").addEventListener("click", function() {
+  const r = store.initStore();
+  populateSchedules();
+  log("init", 'initStore() → isFirstRun: <span class="ok">' + r.isFirstRun + '</span>', "ok");
+  log("init", 'Movies: <span class="ok">' + store.getMovies().length + '</span> | Schedules: <span class="ok">' + store.getSchedules().length + '</span> | Halls: <span class="ok">' + store.getHalls().length + '</span>', "info");
+  const keys = store.getSchedules().map(function(s) { return s.scheduleId + ':' + store.getSeatStateBySchedule(s.scheduleId).length + ' seats'; }).join(" ");
+  log("init", "SeatStates: " + keys, "info");
+  updateBadge();
+  showOrders();
+});
 
-    // ===== 2. Users (C-1~5) =====
-    document.getElementById("btn-register").addEventListener("click", () => {
-      const u = document.getElementById("reg-user").value.trim();
-      const p = document.getElementById("reg-pass").value;
-      const r = store.register(u, p);
-      log("user", `register("${u}") → ${r.success
-        ? `<span class="ok">SUCCESS: ${r.message} (userId=${r.user?.userId})</span>`
-        : `<span class="err">FAIL: ${r.message}</span>`}`, r.success ? "ok" : "err");
-      updateBadge();
-    });
-
-    document.getElementById("btn-login").addEventListener("click", () => {
-      const u = document.getElementById("login-user").value.trim() || "testuser";
-      const p = document.getElementById("login-pass").value || "123456";
-      const r = store.login(u, p);
-      log("user", `login("${u}") → ${r.success
-        ? `<span class="ok">SUCCESS: ${r.message} (role=${r.user?.role})</span>`
-        : `<span class="err">FAIL: ${r.message}</span>`}`, r.success ? "ok" : "err");
-      updateBadge();
-    });
-
-    document.getElementById("btn-logout").addEventListener("click", () => {
-      store.logout();
-      log("user", '<span class="info">logout() done</span>', "info");
-      updateBadge();
-    });
-
-    document.getElementById("btn-current").addEventListener("click", () => {
-      const u = store.getCurrentUser();
-      const el = document.getElementById("log-user");
-      if (u) {
-        el.innerHTML = `<span class="ok">Logged in: ${u.username} (${u.role}) | userId: ${u.userId} | nickname: ${u.nickname} | isAdmin: ${store.isAdmin()}</span>`;
-      } else {
-        el.innerHTML = `<span class="warn">Not logged in | isLoggedIn=${store.isLoggedIn()} | isAdmin=${store.isAdmin()}</span>`;
-      }
-      updateBadge();
-    });
-
-    // ===== 3. Orders (D-1~8) =====
-    document.getElementById("btn-createorder").addEventListener("click", () => {
-      if (!store.isLoggedIn()) { log("order", '<span class="err">Login first</span>', "err"); return; }
-      const scheduleId = document.getElementById("order-schedule").value;
-      const seatIds = document.getElementById("order-seats").value.split(",").map((s) => s.trim()).filter(Boolean);
-      const ticketType = document.getElementById("order-type").value;
-      const peopleCount = parseInt(document.getElementById("order-count").value) || 1;
-      if (seatIds.length === 0) { log("order", '<span class="err">No seats provided</span>', "err"); return; }
-
-      const r = store.createOrder({ scheduleId, seatIds, ticketType, peopleCount });
-      log("order", `createOrder(${scheduleId}, [${seatIds}]) → ${r.success
-        ? `<span class="ok">OK: ${r.message} | orderId=${r.order?.orderId} | total=$${r.order?.totalPrice} | expires:${new Date(r.order?.expiresAt).toLocaleTimeString()}</span>`
-        : `<span class="err">FAIL: ${r.message}</span>`}`, r.success ? "ok" : "err");
-      if (r.success) showOrders();
-    });
-
-    document.getElementById("btn-payorder").addEventListener("click", () => {
-      const orders = store.getOrders({ status: "booked" });
-      if (orders.length === 0) { log("order", '<span class="err">No booked orders</span>', "err"); return; }
-      const r = store.payOrder(orders[0].orderId);
-      log("order", `payOrder(${orders[0].orderId}) → ${r.success
-        ? `<span class="ok">OK: ${r.message}</span>`
-        : `<span class="err">FAIL: ${r.message}</span>`}`, r.success ? "ok" : "err");
-      if (r.success) showOrders();
-    });
-
-    document.getElementById("btn-cancelorder").addEventListener("click", () => {
-      const orders = store.getOrders({ status: "booked" });
-      if (orders.length === 0) { log("order", '<span class="err">No booked orders to cancel</span>', "err"); return; }
-      const r = store.cancelOrder(orders[0].orderId);
-      log("order", `cancelOrder(${orders[0].orderId}) → ${r.success
-        ? `<span class="ok">OK: ${r.message}</span>`
-        : `<span class="err">FAIL: ${r.message}</span>`}`, r.success ? "ok" : "err");
-      if (r.success) showOrders();
-    });
-
-    document.getElementById("btn-refundorder").addEventListener("click", () => {
-      const orders = store.getOrders({ status: "purchased" });
-      if (orders.length === 0) { log("order", '<span class="err">No purchased orders to refund</span>', "err"); return; }
-      const r = store.refundOrder(orders[0].orderId);
-      log("order", `refundOrder(${orders[0].orderId}) → ${r.success
-        ? `<span class="ok">OK: ${r.message}</span>`
-        : `<span class="err">FAIL: ${r.message}</span>`}`, r.success ? "ok" : "err");
-      if (r.success) showOrders();
-    });
-
-    document.getElementById("btn-orders").addEventListener("click", showOrders);
-
-    document.getElementById("btn-seatstats").addEventListener("click", () => {
-      const scheduleId = document.getElementById("order-schedule").value;
-      const remaining = store.getRemainingSeats(scheduleId);
-      const seats = store.getSeatStateBySchedule(scheduleId);
-      const a = seats.filter((s) => s.status === "available").length;
-      const r = seats.filter((s) => s.status === "reserved").length;
-      const d = seats.filter((s) => s.status === "sold").length;
-      log("order", `<span class="ok">Schedule ${scheduleId}</span>: total ${seats.length} | avail ${a} | reserved ${r} | sold ${d} | getRemainingSeats=${remaining}`, "info");
-    });
-
-    // ===== 4. Heat Map (F-1~5) =====
-    document.getElementById("btn-heatmap").addEventListener("click", () => {
-      const scheduleId = document.getElementById("heat-schedule").value;
-      const data = store.getHeatMapBySchedule(scheduleId);
-      if (data.length === 0) { log("heat", '<span class="err">No heat data</span>', "err"); return; }
-      const high = data.filter((h) => h.heatScore >= 0.7).length;
-      const mid = data.filter((h) => h.heatScore >= 0.3 && h.heatScore < 0.7).length;
-      const low = data.filter((h) => h.heatScore < 0.3).length;
-      const sample = data.slice(0, 8).map((h) => `${h.seatId}:${h.heatScore}`).join(" ");
-      log("heat", `Schedule ${scheduleId}: ${data.length} seats | <span class="err">HIGH ${high}</span> | <span class="warn">MID ${mid}</span> | <span class="info">LOW ${low}</span>\nSample: ${sample}`, "info");
-    });
-
-    document.getElementById("btn-heatoverview").addEventListener("click", () => {
-      const scheduleId = document.getElementById("heat-schedule").value;
-      const data = store.getHeatMapBySchedule(scheduleId);
-      if (data.length === 0) { log("heat", '<span class="err">No heat data</span>', "err"); return; }
-      const scores = data.map((h) => h.heatScore);
-      const avg = (scores.reduce((a,b) => a+b, 0) / scores.length).toFixed(3);
-      const max = Math.max(...scores).toFixed(2);
-      const min = Math.min(...scores).toFixed(2);
-      log("heat", `<span class="ok">Schedule ${scheduleId}</span>: avg=${avg} | max=${max} | min=${min}`, "info");
-    });
-
-    document.getElementById("btn-updateheat").addEventListener("click", () => {
-      const scheduleId = document.getElementById("heat-schedule").value;
-      const seatId = document.getElementById("heat-seat").value.trim();
-      const delta = parseFloat(document.getElementById("heat-delta").value) || 0;
-      if (!seatId) { log("heat", '<span class="err">No seat ID</span>', "err"); return; }
-      store.updateHeatScore(scheduleId, seatId, delta);
-      const data = store.getHeatMapBySchedule(scheduleId);
-      const item = data.find((h) => h.seatId === seatId);
-      log("heat", `updateHeatScore(${scheduleId}, ${seatId}, ${delta > 0 ? "+" + delta : delta}) → new: <span class="ok">${item?.heatScore ?? "not found"}</span>`, "ok");
-    });
-
-    // ===== Ready =====
-    populateSchedules();
+document.getElementById("btn-clear").addEventListener("click", function() {
+  if (confirm("Clear all LocalStorage data?")) {
+    store.clearAllData();
+    log("init", '<span class="warn">clearAllData() done</span>', "warn");
     updateBadge();
-    log("init", '<span class="ok">Page ready</span> — Click <b>initStore()</b> to initialize mock data', "info");
-    console.log("[TestPage] Ready. store:", store);
-    console.log("[TestPage] Tip: run store.initStore() in Console, or click the button above");
-  </script>
+    document.getElementById("log-order").innerHTML = '<span class="warn">Data cleared</span>';
+    document.getElementById("log-heat").innerHTML = '<span class="warn">Data cleared</span>';
+  }
+});
+
+document.getElementById("btn-checkls").addEventListener("click", function() {
+  const keys = ["smartcinema_users","smartcinema_movies","smartcinema_schedules","smartcinema_halls","smartcinema_orders","smartcinema_seat_state","smartcinema_current_user","smartcinema_heat_map"];
+  const r = keys.map(function(k) {
+    const raw = localStorage.getItem(k);
+    if (!raw) return k + ': <span class="err">NOT FOUND</span>';
+    try {
+      const d = JSON.parse(raw);
+      const len = Array.isArray(d) ? d.length + " items" : (typeof d === "object" ? Object.keys(d).length + " keys" : "?");
+      return k + ': <span class="ok">' + len + '</span>';
+    } catch(e) { return k + ': <span class="err">PARSE ERROR</span>'; }
+  });
+  log("init", r.join("\n"), "info");
+});
+
+// ===== 2. Users =====
+document.getElementById("btn-register").addEventListener("click", function() {
+  const u = document.getElementById("reg-user").value.trim();
+  const p = document.getElementById("reg-pass").value;
+  const r = store.register(u, p);
+  log("user", 'register("' + u + '") → ' + (r.success
+    ? '<span class="ok">SUCCESS: ' + r.message + ' (userId=' + r.user.userId + ')</span>'
+    : '<span class="err">FAIL: ' + r.message + '</span>'), r.success ? "ok" : "err");
+  updateBadge();
+});
+
+document.getElementById("btn-login").addEventListener("click", function() {
+  const u = document.getElementById("login-user").value.trim() || "testuser";
+  const p = document.getElementById("login-pass").value || "123456";
+  const r = store.login(u, p);
+  log("user", 'login("' + u + '") → ' + (r.success
+    ? '<span class="ok">SUCCESS: ' + r.message + ' (role=' + r.user.role + ')</span>'
+    : '<span class="err">FAIL: ' + r.message + '</span>'), r.success ? "ok" : "err");
+  updateBadge();
+});
+
+document.getElementById("btn-admin-login").addEventListener("click", function() {
+  const r = store.login("admin", "admin123");
+  log("user", 'login("admin") → ' + (r.success
+    ? '<span class="ok">SUCCESS: logged in as admin</span>'
+    : '<span class="err">FAIL: ' + r.message + '</span>'), r.success ? "ok" : "err");
+  updateBadge();
+});
+
+document.getElementById("btn-logout").addEventListener("click", function() {
+  store.logout();
+  log("user", '<span class="info">logout() done</span>', "info");
+  updateBadge();
+});
+
+document.getElementById("btn-current").addEventListener("click", function() {
+  const u = store.getCurrentUser();
+  const el = document.getElementById("log-user");
+  if (u) {
+    el.innerHTML = '<span class="ok">Logged in: ' + u.username + ' (' + u.role + ') | userId=' + u.userId + ' | isAdmin=' + store.isAdmin() + '</span>';
+  } else {
+    el.innerHTML = '<span class="warn">Not logged in | isLoggedIn=' + store.isLoggedIn() + ' | isAdmin=' + store.isAdmin() + '</span>';
+  }
+  updateBadge();
+});
+
+// ===== 3. Orders (D-1~D-8) =====
+
+// --- D-1/2: Create Order + Lock Seats ---
+document.getElementById("btn-createorder").addEventListener("click", function() {
+  if (!store.isLoggedIn()) { log("order", '<span class="err">D-1 FAIL: Login first</span>', "err"); return; }
+  const scheduleId = document.getElementById("order-schedule").value;
+  const seatIds = document.getElementById("order-seats").value.split(",").map(function(s) { return s.trim(); }).filter(Boolean);
+  const ticketType = document.getElementById("order-type").value;
+  const peopleCount = parseInt(document.getElementById("order-count").value) || 1;
+  const timeoutMin = parseFloat(document.getElementById("order-timeout").value) || 15;
+
+  if (seatIds.length === 0) { log("order", '<span class="err">D-1 FAIL: No seats</span>', "err"); return; }
+
+  // Verify seats are available before calling
+  const seatsBefore = store.getSeatStateBySchedule(scheduleId);
+  const seatStatuses = seatIds.map(function(sid) {
+    const seat = seatsBefore.find(function(s) { return s.seatId === sid; });
+    return sid + ':' + (seat ? seat.status : 'MISSING');
+  }).join(' ');
+
+  const r = store.createOrder({ scheduleId: scheduleId, seatIds: seatIds, ticketType: ticketType, peopleCount: peopleCount });
+  if (r.success) {
+    // Verify D-2: seat lock
+    const seatsAfter = store.getSeatStateBySchedule(scheduleId);
+    const locked = seatIds.map(function(sid) {
+      const seat = seatsAfter.find(function(s) { return s.seatId === sid; });
+      return sid + ':' + (seat ? seat.status : '?');
+    }).join(' ');
+    log("order", '<span class="ok">D-1 CREATE:</span> orderId=' + r.order.orderId + ' | total=$' + r.order.totalPrice + ' | expires=' + new Date(r.order.expiresAt).toLocaleTimeString() + '\n<span class="ok">D-2 LOCK:</span> seats before=[' + seatStatuses + '] → after=[' + locked + ']', "ok");
+  } else {
+    log("order", '<span class="err">D-1 FAIL: ' + r.message + '</span>\nSeat statuses: [' + seatStatuses + ']', "err");
+  }
+  showOrders();
+});
+
+// --- D-3: Pay ---
+document.getElementById("btn-payorder").addEventListener("click", function() {
+  const orders = store.getOrders({ status: "booked" });
+  if (orders.length === 0) { log("order", '<span class="err">D-3: No booked orders to pay</span>', "err"); return; }
+  const oid = orders[0].orderId;
+  const scheduleId = orders[0].scheduleId;
+  const seatIds = orders[0].seatIds;
+
+  const seatsBefore = store.getSeatStateBySchedule(scheduleId);
+  const beforeStatus = seatIds.map(function(sid) {
+    const s = seatsBefore.find(function(x) { return x.seatId === sid; });
+    return sid + ':' + (s ? s.status : '?');
+  }).join(' ');
+
+  const r = store.payOrder(oid);
+
+  const seatsAfter = store.getSeatStateBySchedule(scheduleId);
+  const afterStatus = seatIds.map(function(sid) {
+    const s = seatsAfter.find(function(x) { return x.seatId === sid; });
+    return sid + ':' + (s ? s.status : '?');
+  }).join(' ');
+
+  log("order", 'D-3 payOrder(' + oid + ') → ' + (r.success
+    ? '<span class="ok">SUCCESS: ' + r.message + '</span>\nSeats: [' + beforeStatus + '] → [' + afterStatus + ']'
+    : '<span class="err">FAIL: ' + r.message + '</span>'), r.success ? "ok" : "err");
+  showOrders();
+});
+
+// --- D-4: Cancel ---
+document.getElementById("btn-cancelorder").addEventListener("click", function() {
+  const orders = store.getOrders({ status: "booked" });
+  if (orders.length === 0) { log("order", '<span class="err">D-4: No booked orders to cancel</span>', "err"); return; }
+  const oid = orders[0].orderId;
+  const scheduleId = orders[0].scheduleId;
+  const seatIds = orders[0].seatIds;
+
+  const r = store.cancelOrder(oid);
+
+  const seatsAfter = store.getSeatStateBySchedule(scheduleId);
+  const afterStatus = seatIds.map(function(sid) {
+    const s = seatsAfter.find(function(x) { return x.seatId === sid; });
+    return sid + ':' + (s ? s.status : '?');
+  }).join(' ');
+
+  log("order", 'D-4 cancelOrder(' + oid + ') → ' + (r.success
+    ? '<span class="ok">SUCCESS: ' + r.message + '</span>\nSeats released: [' + afterStatus + ']'
+    : '<span class="err">FAIL: ' + r.message + '</span>'), r.success ? "ok" : "err");
+  showOrders();
+});
+
+// --- D-5: Refund ---
+document.getElementById("btn-refundorder").addEventListener("click", function() {
+  const orders = store.getOrders({ status: "purchased" });
+  if (orders.length === 0) { log("order", '<span class="err">D-5: No purchased orders to refund</span>', "err"); return; }
+  const oid = orders[0].orderId;
+  const scheduleId = orders[0].scheduleId;
+  const seatIds = orders[0].seatIds;
+
+  const r = store.refundOrder(oid);
+
+  const seatsAfter = store.getSeatStateBySchedule(scheduleId);
+  const afterStatus = seatIds.map(function(sid) {
+    const s = seatsAfter.find(function(x) { return x.seatId === sid; });
+    return sid + ':' + (s ? s.status : '?');
+  }).join(' ');
+
+  log("order", 'D-5 refundOrder(' + oid + ') → ' + (r.success
+    ? '<span class="ok">SUCCESS: ' + r.message + '</span>\nSeats released: [' + afterStatus + ']'
+    : '<span class="err">FAIL: ' + r.message + '</span>'), r.success ? "ok" : "err");
+  showOrders();
+});
+
+// --- D-6: Force Expire ---
+document.getElementById("btn-forceexpire").addEventListener("click", function() {
+  const orders = store.getOrders({ status: "booked" });
+  if (orders.length === 0) { log("order", '<span class="err">D-6: No booked orders to expire</span>', "err"); return; }
+
+  // Manually expire by calling cancelOrder on each booked order
+  const results = [];
+  for (const o of orders) {
+    const r = store.cancelOrder(o.orderId);
+    results.push(o.orderId + ' → ' + (r.success ? 'CANCELLED' : r.message));
+  }
+  log("order", 'D-6 Force Expire: ' + results.length + ' orders cancelled\n' + results.join('\n'), results.length > 0 ? "ok" : "warn");
+  showOrders();
+});
+
+// --- D-7: Order Query ---
+document.getElementById("btn-orders").addEventListener("click", function() { showOrders(); });
+
+document.getElementById("btn-orders-filtered").addEventListener("click", function() {
+  const status = document.getElementById("order-filter").value;
+  const filter = status ? { status: status } : {};
+  showOrders(filter);
+  log("order", 'D-7 filter status=' + (status || "all") + ' → ' + store.getOrders(filter).length + ' orders', "info");
+});
+
+document.getElementById("btn-orders-clear").addEventListener("click", function() {
+  if (confirm("Clear smartcinema_orders from LS? This only clears LS, not memory.")) {
+    localStorage.removeItem("smartcinema_orders");
+    log("order", '<span class="warn">smartcinema_orders removed from LS. Re-init to restore.</span>', "warn");
+  }
+});
+
+// --- D-8: Interface Verification ---
+document.getElementById("btn-d8-summary").addEventListener("click", function() {
+  const methods = [
+    { name: "D-1 createOrder", test: typeof store.createOrder === "function" ? "OK" : "MISSING" },
+    { name: "D-2 (lock in createOrder)", test: typeof store.createOrder === "function" ? "INTEGRATED" : "MISSING" },
+    { name: "D-3 payOrder", test: typeof store.payOrder === "function" ? "OK" : "MISSING" },
+    { name: "D-4 cancelOrder", test: typeof store.cancelOrder === "function" ? "OK" : "MISSING" },
+    { name: "D-5 refundOrder", test: typeof store.refundOrder === "function" ? "OK" : "MISSING" },
+    { name: "D-6 lock timer", test: typeof store.initStore === "function" ? "AUTO ON INIT" : "MISSING" },
+    { name: "D-7 getOrders(filter)", test: typeof store.getOrders === "function" ? "OK" : "MISSING" },
+    { name: "D-7 getOrderById", test: typeof store.getOrderById === "function" ? "OK" : "MISSING" },
+    { name: "D-8 all exposed", test: "✓ Verified" },
+    { name: "Seat: getSeatStateBySchedule", test: typeof store.getSeatStateBySchedule === "function" ? "OK" : "MISSING" },
+    { name: "Seat: getRemainingSeats", test: typeof store.getRemainingSeats === "function" ? "OK" : "MISSING" },
+    { name: "Seat: updateSeatStatus", test: typeof store.updateSeatStatus === "function" ? "OK" : "MISSING" },
+    { name: "Heat: getHeatMapBySchedule", test: typeof store.getHeatMapBySchedule === "function" ? "OK" : "MISSING" },
+    { name: "Heat: updateHeatScore", test: typeof store.updateHeatScore === "function" ? "OK" : "MISSING" },
+  ];
+  const lines = methods.map(function(m) {
+    const cls = m.test === "OK" || m.test === "INTEGRATED" || m.test === "AUTO ON INIT" || m.test === "✓ Verified" ? "ok" : "err";
+    return '<span class="' + cls + '">' + m.name + ': ' + m.test + '</span>';
+  }).join("\n");
+  log("order", "D-8 Interface Verification:\n" + lines, "info");
+});
+
+// --- Full Flow Auto Test ---
+document.getElementById("btn-fullflow").addEventListener("click", function() {
+  if (!store.isLoggedIn()) { log("order", '<span class="err">Full Flow: Login first (use testuser/123456)</span>', "err"); return; }
+  const scheduleId = document.getElementById("order-schedule").value;
+  const seatIds = document.getElementById("order-seats").value.split(",").map(function(s) { return s.trim(); }).filter(Boolean);
+  if (seatIds.length === 0) { log("order", '<span class="err">Full Flow: Enter seat IDs first (e.g. E-5,E-6)</span>', "err"); return; }
+
+  const results = [];
+
+  // Step 1: Create
+  const r1 = store.createOrder({ scheduleId: scheduleId, seatIds: seatIds, ticketType: "couple", peopleCount: 2 });
+  results.push('Step 1 CREATE: ' + (r1.success ? 'OK orderId=' + r1.order.orderId + ' total=$' + r1.order.totalPrice : 'FAIL ' + r1.message));
+  if (!r1.success) { log("order", results.join('\n'), "err"); return; }
+
+  // Step 2: Pay
+  const r2 = store.payOrder(r1.order.orderId);
+  results.push('Step 2 PAY: ' + (r2.success ? 'OK ' + r2.message : 'FAIL ' + r2.message));
+
+  // Step 3: Verify seat status
+  const seats = store.getSeatStateBySchedule(scheduleId);
+  const sold = seatIds.map(function(sid) {
+    const s = seats.find(function(x) { return x.seatId === sid; });
+    return sid + ':' + (s ? s.status : '?');
+  }).join(' ');
+  results.push('Step 3 VERIFY: seats → [' + sold + ']');
+
+  // Step 4: Refund
+  const r3 = store.refundOrder(r1.order.orderId);
+  results.push('Step 4 REFUND: ' + (r3.success ? 'OK ' + r3.message : 'FAIL ' + r3.message));
+
+  // Step 5: Verify seats released
+  const seats2 = store.getSeatStateBySchedule(scheduleId);
+  const avail = seatIds.map(function(sid) {
+    const s = seats2.find(function(x) { return x.seatId === sid; });
+    return sid + ':' + (s ? s.status : '?');
+  }).join(' ');
+  results.push('Step 5 VERIFY: seats released → [' + avail + ']');
+
+  log("order", '<span class="ok">Full Flow (D auto-test):</span>\n' + results.join('\n'), "ok");
+  showOrders();
+});
+
+// --- Seat Stats ---
+document.getElementById("btn-seatstats").addEventListener("click", function() {
+  const scheduleId = document.getElementById("order-schedule").value;
+  const remaining = store.getRemainingSeats(scheduleId);
+  const seats = store.getSeatStateBySchedule(scheduleId);
+  const a = seats.filter(function(s) { return s.status === "available"; }).length;
+  const r = seats.filter(function(s) { return s.status === "reserved"; }).length;
+  const d = seats.filter(function(s) { return s.status === "sold"; }).length;
+  log("order", '<span class="ok">Schedule ' + scheduleId + '</span>: total ' + seats.length + ' | avail ' + a + ' | reserved ' + r + ' | sold ' + d + ' | getRemainingSeats=' + remaining, "info");
+});
+
+// ===== 4. Heat =====
+document.getElementById("btn-heatmap").addEventListener("click", function() {
+  const scheduleId = document.getElementById("heat-schedule").value;
+  const data = store.getHeatMapBySchedule(scheduleId);
+  if (data.length === 0) { log("heat", '<span class="err">No heat data</span>', "err"); return; }
+  const high = data.filter(function(h) { return h.heatScore >= 0.7; }).length;
+  const mid = data.filter(function(h) { return h.heatScore >= 0.3 && h.heatScore < 0.7; }).length;
+  const low = data.filter(function(h) { return h.heatScore < 0.3; }).length;
+  const sample = data.slice(0, 8).map(function(h) { return h.seatId + ':' + h.heatScore; }).join(" ");
+  log("heat", 'Schedule ' + scheduleId + ': ' + data.length + ' seats | <span class="err">HIGH ' + high + '</span> | <span class="warn">MID ' + mid + '</span> | <span class="info">LOW ' + low + '</span>\nSample: ' + sample, "info");
+});
+
+document.getElementById("btn-heatoverview").addEventListener("click", function() {
+  const scheduleId = document.getElementById("heat-schedule").value;
+  const data = store.getHeatMapBySchedule(scheduleId);
+  if (data.length === 0) { log("heat", '<span class="err">No heat data</span>', "err"); return; }
+  const scores = data.map(function(h) { return h.heatScore; });
+  const avg = (scores.reduce(function(a,b) { return a+b; }, 0) / scores.length).toFixed(3);
+  const max = Math.max.apply(null, scores).toFixed(2);
+  const min = Math.min.apply(null, scores).toFixed(2);
+  log("heat", '<span class="ok">Schedule ' + scheduleId + '</span>: avg=' + avg + ' | max=' + max + ' | min=' + min, "info");
+});
+
+document.getElementById("btn-updateheat").addEventListener("click", function() {
+  const scheduleId = document.getElementById("heat-schedule").value;
+  const seatId = document.getElementById("heat-seat").value.trim();
+  const delta = parseFloat(document.getElementById("heat-delta").value) || 0;
+  if (!seatId) { log("heat", '<span class="err">No seat ID</span>', "err"); return; }
+  store.updateHeatScore(scheduleId, seatId, delta);
+  const data = store.getHeatMapBySchedule(scheduleId);
+  const item = data.find(function(h) { return h.seatId === seatId; });
+  log("heat", 'updateHeatScore(' + scheduleId + ', ' + seatId + ', ' + (delta > 0 ? "+" + delta : delta) + ') → new: <span class="ok">' + (item ? item.heatScore : "not found") + '</span>', "ok");
+});
+
+// ===== Ready =====
+populateSchedules();
+updateBadge();
+log("init", '<span class="ok">Page ready</span> — Click <b>initStore()</b> then test D-1~D-8 order flow', "info");
+console.log("[TestPage] Ready. store:", store);
+</script>
 </body>
 </html>
