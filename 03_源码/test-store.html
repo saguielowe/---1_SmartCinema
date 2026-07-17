@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Store 测试面板 — C 模块 visual cargo test</title>
+  <style>
+    :root {
+      --bg: #1a1a2e;
+      --panel: #16213e;
+      --border: #0f3460;
+      --text: #e0e0e0;
+      --muted: #8899aa;
+      --green: #2ecc71;
+      --red: #e74c3c;
+      --yellow: #f39c12;
+      --blue: #3498db;
+      --accent: #e94560;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 20px;
+    }
+    h1 { color: var(--accent); margin-bottom: 8px; }
+    .sub { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      max-width: 1200px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .panel h2 {
+      font-size: 16px;
+      color: var(--blue);
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px;
+    }
+    .full { grid-column: 1 / -1; }
+
+    button {
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--panel);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+      margin: 2px 4px 2px 0;
+    }
+    button:hover { background: var(--border); }
+    button.primary { background: var(--accent); border-color: var(--accent); font-weight: bold; }
+    button.danger { background: var(--red); border-color: var(--red); }
+    button.green { background: var(--green); border-color: var(--green); color: #000; }
+
+    input, select {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      margin: 2px 4px 2px 0;
+    }
+
+    .log {
+      background: #0a0a16;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 10px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+    .log .ok { color: var(--green); }
+    .log .err { color: var(--red); }
+    .log .warn { color: var(--yellow); }
+    .log .info { color: var(--blue); }
+
+    .stat { display: inline-block; background: var(--border); border-radius: 4px; padding: 2px 8px; font-size: 12px; margin: 2px 4px 2px 0; }
+    .stat.ok { background: #1a3a1a; color: var(--green); }
+    .stat.err { background: #3a1a1a; color: var(--red); }
+  </style>
+</head>
+<body>
+  <h1>🧪 SmartCinema Store 测试面板</h1>
+  <p class="sub">C 模块 visual cargo test — 验证 store.js 全部接口</p>
+
+  <div class="grid">
+    <!-- 初始化 -->
+    <section class="panel">
+      <h2>1. 初始化 & LocalStorage</h2>
+      <button class="primary" onclick="doInit()">initStore()</button>
+      <button class="danger" onclick="doClear()">clearAllData()</button>
+      <button onclick="checkLS()">检查 LS 数据</button>
+      <div class="log" id="log-init">点击 initStore() 开始...</div>
+    </section>
+
+    <!-- 用户 -->
+    <section class="panel">
+      <h2>2. 用户模块</h2>
+      <input id="reg-user" placeholder="用户名" />
+      <input id="reg-pass" placeholder="密码" type="password" />
+      <button class="primary" onclick="doRegister()">注册</button>
+      <br />
+      <input id="login-user" placeholder="testuser" />
+      <input id="login-pass" placeholder="123456" type="password" />
+      <button class="green" onclick="doLogin()">登录</button>
+      <button onclick="doLogout()">登出</button>
+      <br />
+      <button onclick="showCurrentUser()">查看当前用户</button>
+      <button onclick="showAllUsers()">查看全部用户</button>
+      <div class="log" id="log-user">未初始化</div>
+    </section>
+
+    <!-- 订单 -->
+    <section class="panel">
+      <h2>3. 订单模块</h2>
+      <div style="margin-bottom:8px">
+        场次 <select id="order-schedule"></select>
+        座位 <input id="order-seats" placeholder="E-5,E-6" style="width:120px" />
+        票种 <select id="order-type">
+          <option>single</option>
+          <option>couple</option>
+          <option>family</option>
+          <option>group</option>
+        </select>
+        人数 <input id="order-count" value="2" style="width:50px" type="number" min="1" />
+      </div>
+      <button class="primary" onclick="doCreateOrder()">创建订单（预订）</button>
+      <button class="green" onclick="doPayOrder()">模拟支付</button>
+      <button class="danger" onclick="doCancelOrder()">取消预订</button>
+      <button class="danger" onclick="doRefundOrder()">退票</button>
+      <br />
+      <button onclick="showOrders()">查看订单列表</button>
+      <button onclick="showSeatStats()">查看座位状态统计</button>
+      <div class="log" id="log-order">未初始化</div>
+    </section>
+
+    <!-- 热度 -->
+    <section class="panel">
+      <h2>4. 热度数据</h2>
+      场次 <select id="heat-schedule"></select>
+      <button onclick="showHeatMap()">查看热度数据</button>
+      <button onclick="showHeatOverview()">热度概览</button>
+      <br />
+      座位 <input id="heat-seat" placeholder="F-10" style="width:80px" /> Δ
+      <input id="heat-delta" value="0.05" style="width:60px" />
+      <button onclick="doUpdateHeat()">更新热度</button>
+      <div class="log" id="log-heat">未初始化</div>
+    </section>
+
+    <!-- 综合日志 -->
+    <section class="panel full">
+      <h2>📋 操作日志（Console 也有输出）</h2>
+      <div class="log" id="log-all" style="max-height:200px">等待操作...</div>
+    </section>
+  </div>
+
+  <script type="module">
+    import { store } from "./js/store.js";
+
+    // 把 store 挂到 window，方便所有 onclick 函数访问
+    window.__store = store;
+
+    // 填充场次下拉
+    function populateSchedules() {
+      const scheds = store.getSchedules();
+      const selects = document.querySelectorAll('#order-schedule, #heat-schedule');
+      selects.forEach((sel) => {
+        sel.innerHTML = scheds.map((s) => {
+          const movie = store.getMovieById(s.movieId);
+          return `<option value="${s.scheduleId}">${s.scheduleId} — ${movie?.title||'?'} — ${s.hallId} (${s.date} ${s.startTime})</option>`;
+        }).join('');
+      });
+    }
+
+    window.doInit = function () {
+      const result = store.initStore();
+      populateSchedules();
+      log('init', `initStore() → isFirstRun: ${result.isFirstRun}`, 'ok');
+      log('init', `已加载 ${store.getMovies().length} 部电影, ${store.getSchedules().length} 个场次, ${store.getHalls().length} 个影厅`, 'info');
+      log('init', `seatStates 场次数: ${Object.keys(store.getSeatStateBySchedule ? '需用内部状态' : 0)}`, 'info');
+      showCurrentUser();
+      showOrders();
+    };
+
+    window.doClear = function () {
+      if (confirm('确认清除所有 LocalStorage 数据？')) {
+        store.clearAllData();
+        log('init', 'clearAllData() 已执行，所有数据已清除', 'warn');
+      }
+    };
+
+    window.checkLS = function () {
+      const keys = ['smartcinema_users','smartcinema_movies','smartcinema_schedules','smartcinema_halls','smartcinema_orders','smartcinema_seat_state','smartcinema_current_user','smartcinema_heat_map'];
+      const results = keys.map((k) => {
+        const raw = localStorage.getItem(k);
+        if (!raw) return `${k}: ❌ 不存在`;
+        try {
+          const data = JSON.parse(raw);
+          const len = Array.isArray(data) ? data.length : (typeof data === 'object' ? Object.keys(data).length + ' keys' : '?');
+          return `${k}: ✅ ${len}`;
+        } catch { return `${k}: ⚠️ JSON 解析失败`; }
+      });
+      log('init', results.join('\n'), 'info');
+    };
+
+    window.doRegister = function () {
+      const u = document.getElementById('reg-user').value;
+      const p = document.getElementById('reg-pass').value;
+      const r = store.register(u, p);
+      log('user', `register("${u}") → ${r.success ? '✅ ' + r.message : '❌ ' + r.message}`, r.success ? 'ok' : 'err');
+      if (r.success) showCurrentUser();
+    };
+
+    window.doLogin = function () {
+      const u = document.getElementById('login-user').value || 'testuser';
+      const p = document.getElementById('login-pass').value || '123456';
+      const r = store.login(u, p);
+      log('user', `login("${u}") → ${r.success ? '✅ ' + r.message + ' (role: ' + (r.user?.role||'?') + ')' : '❌ ' + r.message}`, r.success ? 'ok' : 'err');
+      if (r.success) showCurrentUser();
+    };
+
+    window.doLogout = function () {
+      store.logout();
+      log('user', 'logout() — 已登出', 'info');
+      showCurrentUser();
+    };
+
+    window.showCurrentUser = function () {
+      const u = store.getCurrentUser();
+      const el = document.getElementById('log-user');
+      if (u) {
+        el.innerHTML = `<span class="ok">✅ 已登录: ${u.username} (${u.role}, userId=${u.userId})</span>`;
+      } else {
+        el.innerHTML = '<span class="warn">⚠️ 未登录</span>';
+      }
+    };
+
+    window.showAllUsers = function () {
+      const users = store.getCurrentUser ? [] : []; // users 是内部 state，store 不直接暴露全部用户给普通接口
+      // 通过 login 摸底
+      log('user', '预设用户: testuser/123456 (user), admin/admin123 (admin)', 'info');
+    };
+
+    window.doCreateOrder = function () {
+      const scheduleId = document.getElementById('order-schedule').value;
+      const seatIds = document.getElementById('order-seats').value.split(',').map((s) => s.trim()).filter(Boolean);
+      const ticketType = document.getElementById('order-type').value;
+      const peopleCount = parseInt(document.getElementById('order-count').value) || 1;
+
+      if (!store.isLoggedIn()) {
+        log('order', '❌ 请先登录再创建订单', 'err');
+        return;
+      }
+      if (seatIds.length === 0) {
+        log('order', '❌ 请填写座位 ID（逗号分隔）', 'err');
+        return;
+      }
+
+      const r = store.createOrder({ scheduleId, seatIds, ticketType, peopleCount });
+      log('order', `createOrder(${scheduleId}, [${seatIds}]) → ${r.success ? '✅ ' + r.message + ' | orderId=' + r.order?.orderId + ' | 总价=' + r.order?.totalPrice : '❌ ' + r.message}`, r.success ? 'ok' : 'err');
+      if (r.success) showOrders();
+    };
+
+    window.doPayOrder = function () {
+      const orders = store.getOrders({ status: 'booked' });
+      if (orders.length === 0) {
+        log('order', '❌ 没有待支付的订单', 'err');
+        return;
+      }
+      const oid = orders[0].orderId;
+      const r = store.payOrder(oid);
+      log('order', `payOrder(${oid}) → ${r.success ? '✅ ' + r.message : '❌ ' + r.message}`, r.success ? 'ok' : 'err');
+      if (r.success) showOrders();
+    };
+
+    window.doCancelOrder = function () {
+      const orders = store.getOrders({ status: 'booked' });
+      if (orders.length === 0) {
+        log('order', '❌ 没有可取消的订单', 'err');
+        return;
+      }
+      const oid = orders[0].orderId;
+      const r = store.cancelOrder(oid);
+      log('order', `cancelOrder(${oid}) → ${r.success ? '✅ ' + r.message : '❌ ' + r.message}`, r.success ? 'ok' : 'err');
+      if (r.success) showOrders();
+    };
+
+    window.doRefundOrder = function () {
+      const orders = store.getOrders({ status: 'purchased' });
+      if (orders.length === 0) {
+        log('order', '❌ 没有可退票的订单', 'err');
+        return;
+      }
+      const oid = orders[0].orderId;
+      const r = store.refundOrder(oid);
+      log('order', `refundOrder(${oid}) → ${r.success ? '✅ ' + r.message : '❌ ' + r.message}`, r.success ? 'ok' : 'err');
+      if (r.success) showOrders();
+    };
+
+    window.showOrders = function () {
+      const orders = store.getOrders();
+      const el = document.getElementById('log-order');
+      if (orders.length === 0) {
+        el.innerHTML = '<span class="warn">📭 暂无订单</span>';
+        return;
+      }
+      const lines = orders.map((o) => {
+        const movie = store.getMovieById(store.getScheduleById(o.scheduleId)?.movieId);
+        const color = o.status === 'purchased' ? 'ok' : o.status === 'cancelled' || o.status === 'refunded' ? 'err' : 'warn';
+        return `<span class="${color}">[${o.status}/${o.paymentStatus}] ${o.orderId} — ${movie?.title||'?'} — 座位:${o.seatIds.join(',')} — ¥${o.totalPrice}</span>`;
+      });
+      el.innerHTML = lines.join('\n');
+    };
+
+    window.showSeatStats = function () {
+      const scheduleId = document.getElementById('order-schedule').value;
+      const remaining = store.getRemainingSeats(scheduleId);
+      const seats = store.getSeatStateBySchedule(scheduleId);
+      const available = seats.filter((s) => s.status === 'available').length;
+      const sold = seats.filter((s) => s.status === 'sold').length;
+      const reserved = seats.filter((s) => s.status === 'reserved').length;
+      log('order', `场次 ${scheduleId}: 总 ${seats.length} | 可用 ${available} | 已锁 ${reserved} | 已售 ${sold} | remainingSeats=${remaining}`, 'info');
+    };
+
+    window.showHeatMap = function () {
+      const scheduleId = document.getElementById('heat-schedule').value;
+      const data = store.getHeatMapBySchedule(scheduleId);
+      if (data.length === 0) {
+        log('heat', '❌ 无热度数据', 'err');
+        return;
+      }
+      const high = data.filter((h) => h.heatScore >= 0.7).length;
+      const mid = data.filter((h) => h.heatScore >= 0.3 && h.heatScore < 0.7).length;
+      const low = data.filter((h) => h.heatScore < 0.3).length;
+      const sample = data.slice(0, 8).map((h) => `${h.seatId}:${h.heatScore}`).join(' ');
+      log('heat', `场次 ${scheduleId}: 共 ${data.length} 个座位 | 🔥高热度 ${high} | 🟡中热度 ${mid} | 🔵低热度 ${low}\n示例: ${sample}`, 'info');
+    };
+
+    window.showHeatOverview = function () {
+      const scheduleId = document.getElementById('heat-schedule').value;
+      const data = store.getHeatMapBySchedule(scheduleId);
+      if (data.length === 0) { log('heat', '❌ 无热度数据', 'err'); return; }
+      const scores = data.map((h) => h.heatScore);
+      const avg = (scores.reduce((a,b) => a+b, 0) / scores.length).toFixed(3);
+      const max = Math.max(...scores).toFixed(2);
+      const min = Math.min(...scores).toFixed(2);
+      log('heat', `场次 ${scheduleId} 热度概览: avg=${avg} | max=${max} | min=${min}`, 'info');
+    };
+
+    window.doUpdateHeat = function () {
+      const scheduleId = document.getElementById('heat-schedule').value;
+      const seatId = document.getElementById('heat-seat').value.trim();
+      const delta = parseFloat(document.getElementById('heat-delta').value) || 0;
+      if (!seatId) { log('heat', '❌ 请填写座位 ID', 'err'); return; }
+      store.updateHeatScore(scheduleId, seatId, delta);
+      const data = store.getHeatMapBySchedule(scheduleId);
+      const item = data.find((h) => h.seatId === seatId);
+      log('heat', `updateHeatScore(${scheduleId}, ${seatId}, ${delta}) → 新值: ${item?.heatScore ?? '未找到'}`, 'ok');
+    };
+
+    function log(panelId, msg, cls) {
+      const el = document.getElementById(`log-${panelId}`);
+      if (el) el.innerHTML = msg;
+      // 同时写综合日志
+      const allEl = document.getElementById('log-all');
+      const time = new Date().toLocaleTimeString();
+      allEl.innerHTML = `<span class="${cls||''}">[${time}]</span> ${msg}\n` + allEl.innerHTML;
+      if (allEl.innerHTML.length > 5000) allEl.innerHTML = allEl.innerHTML.slice(0, 5000);
+    }
+
+    // 页面加载时填充场次下拉（不自动 initStore，由用户点击触发）
+    log('init', '✅ 页面就绪。点击 initStore() 开始初始化。', 'info');
+  </script>
+</body>
+</html>

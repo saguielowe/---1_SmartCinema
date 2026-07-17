@@ -365,8 +365,9 @@ export function createStore(initialState) {
     persistSeatStates();
     // 热度略微下降（取消/退票，delta 为负）
     for (const seatId of order.seatIds) {
-      updateHeatScore(order.scheduleId, seatId, -0.02);
+      updateHeatScoreInternal(order.scheduleId, seatId, -0.02);
     }
+    persistHeatMaps();
   }
 
   // ===========================================================================
