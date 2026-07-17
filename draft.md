@@ -206,24 +206,24 @@
 
 ### 类别 F：热度数据
 
-- [ ] **F-1** 实现热度数据初始化
+- [x] **F-1** 实现热度数据初始化
   - 为每个 scheduleId × seatId 生成初始 `heatScore`（0~1）
   - 模拟热门区域（中心排、中心位置分数高）、冷门区域（前排边角分数低）
 
-- [ ] **F-2** 实现热度数据查询
+- [x] **F-2** 实现热度数据查询
   - `getHeatMapBySchedule(scheduleId)` → 返回该场次所有座位热度数据
   - `getHeatMapByMovie(movieId)` → 聚合该电影所有场次的热度
 
-- [ ] **F-3** 实现热度更新机制
+- [x] **F-3** 实现热度更新机制
   - 每次座位被售出（status → `sold`）时，该座位热度 +0.05（上限 1.0）
   - 每次订单取消/退票时，该座位热度 -0.02（下限 0.0）
   - 模拟"越多人买就越热门"的效果
 
-- [ ] **F-4** 实现按时间查看热度
+- [x] **F-4** 实现按时间查看热度
   - 不同场次（日期）的热度数据分开存储和查询
   - 支持"一周内不同日期"切换（实际由 schedule.date 区分）
 
-- [ ] **F-5** 暴露给 Store 的热度操作接口
+- [x] **F-5** 暴露给 Store 的热度操作接口
   - `getHeatMapBySchedule(scheduleId)`
   - `getHeatMapByMovie(movieId)`
   - `updateHeatScore(scheduleId, seatId, delta)`

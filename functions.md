@@ -291,13 +291,27 @@ generateAllHeatMaps(): Object<string, Array<heatMapData>>
 **E-3 调用链：** `createOrder` → 座位 available→reserved | `payOrder` → reserved→sold | `cancelOrder`/`refundOrder` → reserved/sold→available（均通过 `cancelOrderInternal` 统一释放）
 **E-4 持久化时机：** createOrder / payOrder / cancelOrder / refundOrder / cancelOrderInternal / updateSeatStatus → 均调用 `persistSeatStates()` 立即写入 LS
 
-### 2.5 热度数据模块
+### 2.5 热度数据模块（F-1~F-5 ✓）
 
-| 方法签名 | 返回值 | 说明 |
-|----------|--------|------|
-| `getHeatMapBySchedule(scheduleId)` | `heatMapData[]` | 某场次热度数据 |
-| `getHeatMapByMovie(movieId)` | `heatMapData[]` | 聚合某电影所有场次热度 |
-| `updateHeatScore(scheduleId, seatId, delta)` | `void` | 更新单个座位热度 ±delta（钳位 0~1）+ 持久化 |
+| 任务 | 方法/位置 | 说明 |
+|------|----------|------|
+| F-1 | `mock-data.js` → `generateHeatMap()` + `generateAllHeatMaps()` + `allHeatMaps` | 初始化：中心排 D-G（ri 在 30%~70%）heatScore 0.6~0.9（越靠列中心越高）；边缘排 A-C/H-J heatScore 0.1~0.4（带微量随机扰动）。全部 12 场次 × 对应影厅预生成存储在 `allHeatMaps`。`initStore()` 首次运行时写入 LS key `smartcinema_heat_map` |
+| F-2 | `getHeatMapBySchedule(scheduleId)` → `heatMapData[]` | 从 `state.heatMaps[scheduleId]` 返回全量数组；无数据返回 `[]` |
+| F-2 | `getHeatMapByMovie(movieId)` → `heatMapData[]` | 遍历该电影的所有场次（通过 `getSchedulesByMovie` 获取 scheduleIds），聚合所有 heatMapData 为扁平数组 |
+| F-3 | `payOrder()` / `cancelOrderInternal()` 内嵌 | 售出时 `updateHeatScoreInternal(scheduleId, seatId, +0.05)`（上限 1.0）；取消/退票时 `updateHeatScoreInternal(scheduleId, seatId, -0.02)`（下限 0.0）。钳位由 `Math.max(0, Math.min(1, ...))` 保证 |
+| F-4 | `state.heatMaps[scheduleId]` 键值结构 | 每个 scheduleId 独立存储，schedule.date 自然区分不同日期场次。`getHeatMapBySchedule(scheduleId)` 直接按场次查询即实现"按时间查看" |
+| F-5 | `updateHeatScore(scheduleId, seatId, delta)` | 公开接口，任意 ±delta 值，钳位 0~1 后四舍五入保留两位小数，立即调用 `persistHeatMaps()` 写 LS |
+| F-5 | `updateHeatScoreInternal(scheduleId, seatId, delta)` | 内部函数，不自动持久化（供 `payOrder`/`cancelOrderInternal` 批量调用后统一 flush） |
+
+**F-3 热度更新触发时机：**
+
+| 事件 | Store 方法 | 热度变化 |
+|------|-----------|---------|
+| 模拟支付成功 | `payOrder()` | seatIds 每个座位 +0.05 |
+| 取消预订 | `cancelOrder()` → `cancelOrderInternal()` | seatIds 每个座位 -0.02 |
+| 退票 | `refundOrder()` → `cancelOrderInternal()` | seatIds 每个座位 -0.02 |
+| 超时自动取消 | `scheduleOrderTimeout()` → `cancelOrderInternal()` | seatIds 每个座位 -0.02 |
+| 手动更新 | `updateHeatScore(scheduleId, seatId, delta)` | 任意 delta |
 
 ### 2.6 锁票超时管理（内部自动）
 
@@ -362,3 +376,4 @@ generateAllHeatMaps(): Object<string, Array<heatMapData>>
 | 2026-07-17 | 创建 test-store.html visual cargo test 面板，修复 onclick→addEventListener binding 问题 | C |
 | 2026-07-17 | D-1~D-8 测试面板完善：Full Flow auto-test、按状态筛选、D-8 接口存在性检查、Force Expire | C |
 | 2026-07-17 | E-1~E-4 座位状态管理文档标注完成：getSeatStateBySchedule / getRemainingSeats / updateSeatStatus / persistSeatStates | C |
+| 2026-07-18 | F-1~F-5 热度数据文档标注完成：generateHeatMap / getHeatMapBySchedule / getHeatMapByMovie / updateHeatScore / updateHeatScoreInternal + 触发时机表 | C |
