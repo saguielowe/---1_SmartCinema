@@ -62,49 +62,49 @@
 
 ### 类别 A：Mock 数据准备（最高优先级，阻塞 A、B 开发）
 
-- [ ] **A-1** 在 `mock-data.js` 中补充三套影厅 `hall` mock 数据
+- [x] **A-1** 在 `mock-data.js` 中补充三套影厅 `hall` mock 数据
   - 小厅 ~100 座、中厅 ~200 座、大厅 ~300 座
   - 均为 10 排，每排可不同座位数
   - 使用 `S/A/X/W` 的 pattern，包含过道、空缺、偏移、弧度
   - 按 `data-schema.md` 中 `hall` 结构编写
 
-- [ ] **A-2** 在 `mock-data.js` 中补充 `movie` mock 数据（3~5 部电影）
+- [x] **A-2** 在 `mock-data.js` 中补充 `movie` mock 数据（3~5 部电影）
 
-- [ ] **A-3** 在 `mock-data.js` 中补充 `schedule` mock 数据
+- [x] **A-3** 在 `mock-data.js` 中补充 `schedule` mock 数据
   - 为每部电影创建 1~3 个场次
   - 指定 hallId、日期、时间、价格
 
-- [ ] **A-4** 在 `mock-data.js` 中补充完整的 `seatState` mock 数据
+- [x] **A-4** 在 `mock-data.js` 中补充完整的 `seatState` mock 数据
   - 为每个 scheduleId 生成所有座位的初始状态（大部分 `available`，少量随机 `sold`）
   - 基于各影厅的 pattern 自动推算所有 seatId（如 A-1, A-2, B-3...）
 
-- [ ] **A-5** 在 `mock-data.js` 中补充 `user` mock 数据
+- [x] **A-5** 在 `mock-data.js` 中补充 `user` mock 数据
   - 至少一个普通用户 + 一个管理员用户
   - 明文密码（项目无后端，仅前端模拟）
 
-- [ ] **A-6** 在 `mock-data.js` 中补充 `heatMapData` mock 数据
+- [x] **A-6** 在 `mock-data.js` 中补充 `heatMapData` mock 数据
   - 为每个 scheduleId 的每个座位生成初始热度值（0~1，模拟热门/一般/冷门区域分布）
 
 ### 类别 B：LocalStorage 持久化层
 
-- [ ] **B-1** 封装统一的 LocalStorage 读写工具函数
+- [x] **B-1** 封装统一的 LocalStorage 读写工具函数
   - `loadFromStorage(key)`：读取并 parse JSON，失败返回 null
   - `saveToStorage(key, data)`：序列化写入
   - `removeFromStorage(key)`：删除
   - 所有 key 使用 `smartcinema_` 前缀（与 data-schema.md 一致）
 
-- [ ] **B-2** 实现应用启动时的初始化逻辑
+- [x] **B-2** 实现应用启动时的初始化逻辑
   - 检查 `smartcinema_users` 是否存在
   - 不存在 → 写入 mock 数据到 LocalStorage
   - 存在 → 直接加载，保留用户已有数据
 
-- [ ] **B-3** 实现数据变更时自动同步到 LocalStorage
+- [x] **B-3** 实现数据变更时自动同步到 LocalStorage
   - 用户注册/登录状态变更时
   - 订单创建/状态变更时
   - 座位状态变更时
   - 热度数据更新时
 
-- [ ] **B-4** 实现"清除数据"功能（供开发调试，可放在管理员后台）
+- [x] **B-4** 实现"清除数据"功能（供开发调试，可放在管理员后台）
 
 ### 类别 C：用户注册与登录
 
@@ -141,7 +141,7 @@
 
 ### 类别 D：订单管理
 
-- [ ] **D-1** 实现创建订单（预订）
+- [x] **D-1** 实现创建订单（预订）
   - 输入：scheduleId、seatIds、ticketType、peopleCount
   - 自动计算 totalPrice（price × seatIds.length）
   - 生成 orderId
@@ -149,39 +149,39 @@
   - 写入 createdAt、expiresAt（建议 15 分钟倒计时）
   - 写入 userId（从当前登录用户取）
 
-- [ ] **D-2** 实现订单创建时的座位锁票
+- [x] **D-2** 实现订单创建时的座位锁票
   - 对应 seatIds 的 seatState → status 改为 `reserved`
   - 写入 userId、orderId、lockedUntil
   - 同时更新 `smartcinema_seat_state` 和 `smartcinema_orders`
 
-- [ ] **D-3** 实现模拟支付（确认购票）
+- [x] **D-3** 实现模拟支付（确认购票）
   - 弹出假支付确认面板 / 弹窗（UI 由 D 做，C 提供底层状态变更）
   - 确认后：
     - `order.status` → `purchased`
     - `order.paymentStatus` → `paid`
     - 对应座位 `status` → `sold`
 
-- [ ] **D-4** 实现取消预订
+- [x] **D-4** 实现取消预订
   - `order.status` → `cancelled`、`paymentStatus` → `closed`
   - 对应座位 `status` → `available`
   - 清除座位上的 userId、orderId、lockedUntil
 
-- [ ] **D-5** 实现退票（已购票后退票）
+- [x] **D-5** 实现退票（已购票后退票）
   - `order.status` → `refunded`、`paymentStatus` → `closed`
   - 对应座位 `status` → `available`
   - 清除座位上的 userId、orderId、lockedUntil
 
-- [ ] **D-6** 实现锁票超时自动释放
+- [x] **D-6** 实现锁票超时自动释放
   - 使用 `setInterval` 或 `setTimeout` 检查所有 `booked` 状态的订单
   - 若当前时间 > expiresAt → 自动执行取消预订逻辑
   - 页面刷新后恢复定时器
 
-- [ ] **D-7** 实现订单查询
+- [x] **D-7** 实现订单查询
   - 普通用户：查询当前用户的所有订单（按时间倒序）
   - 管理员：查询所有用户的所有订单
   - 可按状态筛选（booked / purchased / cancelled / refunded）
 
-- [ ] **D-8** 暴露给 Store 的订单操作接口
+- [x] **D-8** 暴露给 Store 的订单操作接口
   - `createOrder({ scheduleId, seatIds, ticketType, peopleCount })`
   - `payOrder(orderId)`
   - `cancelOrder(orderId)`
@@ -191,18 +191,18 @@
 
 ### 类别 E：座位状态管理
 
-- [ ] **E-1** 实现按 scheduleId 查询座位状态
+- [x] **E-1** 实现按 scheduleId 查询座位状态
   - `getSeatStateBySchedule(scheduleId)` → 返回该场次所有座位状态数组
 
-- [ ] **E-2** 实现剩余座位数计算
+- [x] **E-2** 实现剩余座位数计算
   - `getRemainingSeats(scheduleId)` → 返回 `available` 状态座位数
   - 对应 `schedule.remainingSeats` 字段由此实时计算，不手动维护
 
-- [ ] **E-3** 实现座位状态批量更新
+- [x] **E-3** 实现座位状态批量更新
   - `updateSeatStatus(scheduleId, seatIds, newStatus)` → 更新一批座位的状态
   - 用于与锁票/支付/取消联动
 
-- [ ] **E-4** 确保座位状态变更同步到 LocalStorage
+- [x] **E-4** 确保座位状态变更同步到 LocalStorage
 
 ### 类别 F：热度数据
 

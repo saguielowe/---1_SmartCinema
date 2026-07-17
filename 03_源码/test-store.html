@@ -109,9 +109,20 @@ hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
     <div class="log" id="log-order">Not initialized</div>
   </section>
 
-  <!-- 4. Heat -->
+  <!-- 4. Seat State (E-1~4) -->
+  <section class="panel">
+    <h2>4. Seat State (E-1~4)</h2>
+    <div class="row">Schedule <select id="seat-schedule"></select></div>
+    <button class="primary" id="btn-e1">E-1: getSeatStateBySchedule</button>
+    <button class="green" id="btn-e2">E-2: getRemainingSeats</button>
+    <button id="btn-e3">E-3: updateSeatStatus (test)</button>
+    <button id="btn-e4">E-4: Check LS Persistence</button>
+    <div class="log" id="log-seat">Not initialized</div>
+  </section>
+
+  <!-- 5. Heat -->
   <section class="panel full">
-    <h2>4. Heat Map (F-1~5)</h2>
+    <h2>5. Heat Map (F-1~5)</h2>
     <div class="row">
       Schedule <select id="heat-schedule"></select>
       <button id="btn-heatmap">Show Heat Data</button>
@@ -152,21 +163,22 @@ function updateBadge() {
     : '<span class="warn">Not logged in</span>';
 }
 
-function populateSchedules() {
-  const scheds = store.getSchedules();
-  if (scheds.length === 0) {
-    ["order-schedule","heat-schedule"].forEach(function(id) {
-      document.getElementById(id).innerHTML = "<option>-- initStore first --</option>";
-    });
-    return;
-  }
+    function populateSchedules() {
+      const scheds = store.getSchedules();
+      if (scheds.length === 0) {
+        ["order-schedule","heat-schedule","seat-schedule"].forEach(function(id) {
+          document.getElementById(id).innerHTML = "<option>-- initStore first --</option>";
+        });
+        return;
+      }
   const opts = scheds.map(function(s) {
     const m = store.getMovieById(s.movieId);
     return '<option value="' + s.scheduleId + '">' + s.scheduleId + ' — ' + (m? m.title : "?") + ' (' + s.hallId + ' ' + s.date + ' ' + s.startTime + ')</option>';
   }).join("");
-  document.getElementById("order-schedule").innerHTML = opts;
-  document.getElementById("heat-schedule").innerHTML = opts;
-}
+      document.getElementById("order-schedule").innerHTML = opts;
+      document.getElementById("heat-schedule").innerHTML = opts;
+      document.getElementById("seat-schedule").innerHTML = opts;
+    }
 
 function showOrders(filter) {
   const orders = store.getOrders(filter || {});
@@ -482,7 +494,59 @@ document.getElementById("btn-seatstats").addEventListener("click", function() {
   log("order", '<span class="ok">Schedule ' + scheduleId + '</span>: total ' + seats.length + ' | avail ' + a + ' | reserved ' + r + ' | sold ' + d + ' | getRemainingSeats=' + remaining, "info");
 });
 
-// ===== 4. Heat =====
+// ===== 4. Seat State (E-1~4) =====
+document.getElementById("btn-e1").addEventListener("click", function() {
+  const scheduleId = document.getElementById("seat-schedule").value;
+  const seats = store.getSeatStateBySchedule(scheduleId);
+  if (seats.length === 0) { log("seat", '<span class="err">E-1: No seat data for ' + scheduleId + '</span>', "err"); return; }
+  const avail = seats.filter(function(s) { return s.status === "available"; }).length;
+  const reserved = seats.filter(function(s) { return s.status === "reserved"; }).length;
+  const sold = seats.filter(function(s) { return s.status === "sold"; }).length;
+  const sample = seats.slice(0, 5).map(function(s) { return s.seatId + ":" + s.status; }).join(" ");
+  log("seat", 'E-1 getSeatStateBySchedule("' + scheduleId + '"): total <span class="ok">' + seats.length + '</span> | avail=' + avail + ' | reserved=' + reserved + ' | sold=' + sold + '\nSample: ' + sample, "info");
+});
+
+document.getElementById("btn-e2").addEventListener("click", function() {
+  const scheduleId = document.getElementById("seat-schedule").value;
+  const remaining = store.getRemainingSeats(scheduleId);
+  const total = store.getSeatStateBySchedule(scheduleId).length;
+  log("seat", 'E-2 getRemainingSeats("' + scheduleId + '"): <span class="ok">' + remaining + '</span> / ' + total + ' available | <span class="warn">(schedule.remainingSeats NOT used)</span>', "info");
+});
+
+document.getElementById("btn-e3").addEventListener("click", function() {
+  const scheduleId = document.getElementById("seat-schedule").value;
+  const seatId = prompt("Enter a test seat ID (e.g. E-5):", "E-5");
+  if (!seatId) return;
+  const seats = store.getSeatStateBySchedule(scheduleId);
+  const seat = seats.find(function(s) { return s.seatId === seatId; });
+  if (!seat) { log("seat", '<span class="err">E-3: Seat ' + seatId + ' not found in ' + scheduleId + '</span>', "err"); return; }
+  const before = seat.status;
+  // Toggle between available and reserved for demo
+  const newStatus = before === "available" ? "reserved" : "available";
+  store.updateSeatStatus(scheduleId, [seatId], newStatus);
+  const after = store.getSeatStateBySchedule(scheduleId).find(function(s) { return s.seatId === seatId; }).status;
+  log("seat", 'E-3 updateSeatStatus("' + scheduleId + '", ["' + seatId + '"], "' + newStatus + '"): ' + before + ' → <span class="ok">' + after + '</span>', "ok");
+});
+
+document.getElementById("btn-e4").addEventListener("click", function() {
+  const raw = localStorage.getItem("smartcinema_seat_state");
+  if (!raw) {
+    log("seat", '<span class="err">E-4: smartcinema_seat_state NOT FOUND in LS</span>', "err");
+    return;
+  }
+  try {
+    const data = JSON.parse(raw);
+    const keys = Object.keys(data);
+    const sample = keys.map(function(k) {
+      return k + ":" + (Array.isArray(data[k]) ? data[k].length + " seats" : "?");
+    }).join(" ");
+    log("seat", 'E-4 LS persistence: <span class="ok">smartcinema_seat_state has ' + keys.length + ' schedules</span>\n' + sample, "info");
+  } catch(e) {
+    log("seat", '<span class="err">E-4: JSON parse error</span>', "err");
+  }
+});
+
+// ===== 5. Heat =====
 document.getElementById("btn-heatmap").addEventListener("click", function() {
   const scheduleId = document.getElementById("heat-schedule").value;
   const data = store.getHeatMapBySchedule(scheduleId);

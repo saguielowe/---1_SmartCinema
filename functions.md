@@ -278,13 +278,18 @@ generateAllHeatMaps(): Object<string, Array<heatMapData>>
 | `getOrders(filter?)` | `order[]` | 查询订单（普通用户仅看自己；管理员全量）。filter: { status?, scheduleId? } |
 | `getOrderById(orderId)` | `order\|null` | 单条订单查询 |
 
-### 2.4 座位状态模块
+### 2.4 座位状态模块（E-1~E-4 ✓）
 
-| 方法签名 | 返回值 | 说明 |
-|----------|--------|------|
-| `getSeatStateBySchedule(scheduleId)` | `seatState[]` | 某场次全部座位状态 |
-| `getRemainingSeats(scheduleId)` | `number` | 实时计算 available 座位数 |
-| `updateSeatStatus(scheduleId, seatIds, newStatus)` | `void` | 批量更新座位状态 + 持久化 |
+| 任务 | 方法签名 | 返回值 | 说明 |
+|------|----------|--------|------|
+| E-1 | `getSeatStateBySchedule(scheduleId)` | `seatState[]` | 按 scheduleId 从 `state.seatStates[scheduleId]` 返回完整座位状态数组；无数据返回 `[]` |
+| E-2 | `getRemainingSeats(scheduleId)` | `number` | 实时过滤 `status === "available"` 计数，不依赖 `schedule.remainingSeats` 字段 |
+| E-3 | `updateSeatStatus(scheduleId, seatIds, newStatus)` | `void` | 批量更新一批座位的 status（available/reserved/sold）→ 直接通过订单方法（createOrder/payOrder/cancelOrder）间接调用 |
+| E-4 | `persistSeatStates()` | 内部 | 所有订单操作（createOrder/payOrder/cancelOrder/refundOrder/cancelOrderInternal）均自动调用此函数同步到 LS key `smartcinema_seat_state` |
+
+**E-2 实现细节：** `getRemainingSeats` 每次调用都实时计算，不缓存。`schedule.remainingSeats` 字段仅在 mock 初始化时预设，后续不在任何地方手动维护。
+**E-3 调用链：** `createOrder` → 座位 available→reserved | `payOrder` → reserved→sold | `cancelOrder`/`refundOrder` → reserved/sold→available（均通过 `cancelOrderInternal` 统一释放）
+**E-4 持久化时机：** createOrder / payOrder / cancelOrder / refundOrder / cancelOrderInternal / updateSeatStatus → 均调用 `persistSeatStates()` 立即写入 LS
 
 ### 2.5 热度数据模块
 
@@ -355,3 +360,5 @@ generateAllHeatMaps(): Object<string, Array<heatMapData>>
 | 2026-07-17 | 重构 store.js（B-1~B-4 LocalStorage 持久化层）：loadFromStorage / saveToStorage / initStore / clearAllData / persist* | C |
 | 2026-07-17 | store.js 实现 C/D/E/F 全部接口（注册登录、订单 CRUD+锁票、座位状态、热度数据、超时自动取消） | C |
 | 2026-07-17 | 创建 test-store.html visual cargo test 面板，修复 onclick→addEventListener binding 问题 | C |
+| 2026-07-17 | D-1~D-8 测试面板完善：Full Flow auto-test、按状态筛选、D-8 接口存在性检查、Force Expire | C |
+| 2026-07-17 | E-1~E-4 座位状态管理文档标注完成：getSeatStateBySchedule / getRemainingSeats / updateSeatStatus / persistSeatStates | C |
