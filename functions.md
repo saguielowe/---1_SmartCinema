@@ -325,3 +325,4 @@ generateAllHeatMaps(): Object<string, Array<heatMapData>>
 | 2026-07-17 | 更新 A-4（allSeatStates / generateAllSeatStates / getHallById）和 A-6（allHeatMaps / generateAllHeatMaps） | C |
 | 2026-07-17 | 重构 store.js（B-1~B-4 LocalStorage 持久化层）：loadFromStorage / saveToStorage / initStore / clearAllData / persist* | C |
 | 2026-07-17 | store.js 实现 C/D/E/F 全部接口（注册登录、订单 CRUD+锁票、座位状态、热度数据、超时自动取消） | C |
+| 2026-07-17 | 创建 test-store.html visual cargo test 面板，修复 onclick→addEventListener binding 问题 | C |
