@@ -2,9 +2,89 @@
 
 > 所属分支：`feature/order-storage`
 > 主文件：`03_源码/js/store.js`、`03_源码/js/mock-data.js`
-> 最后更新：2026-07-17
+> 最后更新：2026-07-18
 
 本文档记录 C 模块（及配套 mock 数据模块）中所有对外暴露的函数、接口和数据结构。后续开发过程中持续维护，标注函数签名、参数、返回值和用途。
+
+---
+
+## 〇、G：给 A / B / D 模块的对接接口速查
+
+> C 模块通过 `store` 单例提供以下接口。`app.js` 中 `import { store } from "./store.js"` 后直接调用。
+
+### 给 A 模块（Canvas 座位图）
+
+| 接口 | 签名 | 用途 |
+|------|------|------|
+| `getHalls()` | `() → hall[]` | 获取全部影厅列表 |
+| `getHallById(hallId)` | `(string) → hall\|undefined` | 按 ID 获取影厅（含 rows/pattern/offsetX/curveDepth） |
+| `getSeatStateBySchedule(scheduleId)` | `(string) → seatState[]` | 获取某场次全部座位状态（status: available/reserved/sold） |
+| `getRemainingSeats(scheduleId)` | `(string) → number` | 获取可用座位数 |
+| `getScheduleById(scheduleId)` | `(string) → schedule\|undefined` | 获取场次信息（含 hallId / movieId / price） |
+
+**A 的典型调用：**
+```js
+const schedule = store.getScheduleById("s001");
+const hall = store.getHallById(schedule.hallId);
+const seatState = store.getSeatStateBySchedule("s001");
+drawSeatMap(canvas, { hall, seatState, highlightedSeatIds: [...] });
+```
+
+**A 的输出 → C 的输入：** `selectedSeatIds: string[]` — 用户选中的座位 ID 数组，传给 `store.createOrder()` 的 `seatIds` 参数。
+
+### 给 B 模块（推荐引擎）
+
+| 接口 | 签名 | 用途 |
+|------|------|------|
+| `getHallById(hallId)` | `(string) → hall\|undefined` | 获取影厅结构（含 rows/pattern） |
+| `getSeatStateBySchedule(scheduleId)` | `(string) → seatState[]` | 获取座位状态（B 需要知道哪些座位已售） |
+| `getHalls()` | `() → hall[]` | 全部影厅 |
+| `getSchedules()` | `() → schedule[]` | 全部场次 |
+| `getScheduleById(scheduleId)` | `(string) → schedule\|undefined` | 场次详情 |
+| `getMovieById(movieId)` | `(string) → movie\|undefined` | 电影详情（含 tags/duration/rating） |
+
+**B 的典型调用：**
+```js
+const hall = store.getHallById(schedule.hallId);
+const seatState = store.getSeatStateBySchedule(schedule.scheduleId);
+const result = runRecommendation(recommendationInput, hall, seatState);
+```
+
+**B 的输出 → C 的输入：** `recommendationResult.recommendedSeatIds: string[]` — 可作为 `store.createOrder()` 的 `seatIds` 参数实现"一键接受推荐"。
+
+### 给 D 模块（页面整合 / UI）
+
+| 接口 | 签名 | 用途 |
+|------|------|------|
+| **初始化** ||
+| `initStore()` | `() → { isFirstRun: boolean }` | 应用启动时调用一次，写入 mock 数据或从 LS 恢复 |
+| **用户** ||
+| `register(username, password)` | `→ { success, message, user? }` | 注册新用户 |
+| `login(username, password)` | `→ { success, message, user? }` | 登录 |
+| `logout()` | `void` | 登出 |
+| `getCurrentUser()` | `→ user\|null` | 当前登录用户 |
+| `isLoggedIn()` | `→ boolean` | 是否已登录 |
+| `isAdmin()` | `→ boolean` | 是否管理员 |
+| **订单** ||
+| `createOrder({ scheduleId, seatIds, ticketType, peopleCount })` | `→ { success, message, order? }` | 创建订单 + 锁票 |
+| `payOrder(orderId)` | `→ { success, message }` | 模拟支付 |
+| `cancelOrder(orderId)` | `→ { success, message }` | 取消预订 |
+| `refundOrder(orderId)` | `→ { success, message }` | 退票 |
+| `getOrders(filter?)` | `→ order[]` | 查询订单（普通用户只看自己的） |
+| `getOrderById(orderId)` | `→ order\|null` | 单条订单 |
+| **座位** ||
+| `getSeatStateBySchedule(scheduleId)` | `→ seatState[]` | 座位状态 |
+| `getRemainingSeats(scheduleId)` | `→ number` | 可用座位数 |
+| `updateSeatStatus(scheduleId, seatIds, newStatus)` | `void` | 批量更新座位 |
+| **热度** ||
+| `getHeatMapBySchedule(scheduleId)` | `→ heatMapData[]` | 热度数据 |
+| `getHeatMapByMovie(movieId)` | `→ heatMapData[]` | 电影聚合热度 |
+| `updateHeatScore(scheduleId, seatId, delta)` | `void` | 手动更新热度 |
+| **基础查询** ||
+| `getMovies()` / `getMovieById(id)` | `→ movie[]` / `movie\|undefined` | 电影数据 |
+| `getSchedules()` / `getScheduleById(id)` / `getSchedulesByMovie(movieId)` | `→ schedule[]` / `schedule\|undefined` / `schedule[]` | 场次数据 |
+| `getHalls()` / `getHallById(id)` | `→ hall[]` / `hall\|undefined` | 影厅数据 |
+| `clearAllData()` | `void` | 调试用清除全部数据 |
 
 ---
 
@@ -377,3 +457,4 @@ generateAllHeatMaps(): Object<string, Array<heatMapData>>
 | 2026-07-17 | D-1~D-8 测试面板完善：Full Flow auto-test、按状态筛选、D-8 接口存在性检查、Force Expire | C |
 | 2026-07-17 | E-1~E-4 座位状态管理文档标注完成：getSeatStateBySchedule / getRemainingSeats / updateSeatStatus / persistSeatStates | C |
 | 2026-07-18 | F-1~F-5 热度数据文档标注完成：generateHeatMap / getHeatMapBySchedule / getHeatMapByMovie / updateHeatScore / updateHeatScoreInternal + 触发时机表 | C |
+| 2026-07-18 | G-1~G-4 Store 整合完成：添加 §〇 给 A/B/D 的对接接口速查表（25+ 方法签名 + 典型调用示例），更新 app.js 接入新的 store 单例 | C |

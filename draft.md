@@ -230,23 +230,26 @@
 
 ### 类别 G：Store 重构与接口整合
 
-- [ ] **G-1** 重构 `createStore()`，整合所有模块
+- [x] **G-1** 重构 `createStore()`，整合所有模块
   - 用户模块（登录/注册/会话）
   - 订单模块（CRUD + 锁票）
   - 座位状态模块
   - 热度数据模块
   - LocalStorage 同步
 
-- [ ] **G-2** 统一对外暴露的公共接口
+- [x] **G-2** 统一对外暴露的公共接口
   - 确保 A/B/D 可以通过 Store 实例获取所需数据
   - 提供清晰的 getter 方法，避免内部状态被直接篡改
+  - `functions.md §〇` 提供 25+ 方法签名的分模块速查表（含典型调用示例）
 
-- [ ] **G-3** 更新 `app.js` 中的 Store 调用
-  - 替换占位的 `renderOrders()` 为实际订单列表
-  - 接入登录状态判断
-  - 在页面加载时调用 Store 初始化方法
+- [x] **G-3** 更新 `app.js` 中的 Store 调用
+  - 替换为 `import { store } from "./store.js"` 单例
+  - 启动时调用 `store.initStore()`
+  - `renderOrders()` 接入实际订单列表 + 登录状态 + 座位统计
+  - 通过 `store.getScheduleById` / `getHallById` / `getSeatStateBySchedule` 为 A 提供数据
 
-- [ ] **G-4** 确保 Store 方法可以被 D 在 `app.js` 中方便地接线调用
+- [x] **G-4** 确保 Store 方法可以被 D 在 `app.js` 中方便地接线调用
+  - `window.__store = store` 挂载到全局供 Console 调试
 
 ### 类别 H：协作与文档
 
