@@ -253,22 +253,24 @@
 
 ### 类别 H：协作与文档
 
-- [ ] **H-1** 更新 `docs/data-schema.md`
-  - 如果开发中发现需要新增字段或调整结构，先更新文档再改代码
-  - 在微信群发送结论和链接
+- [x] **H-1** 更新 `docs/data-schema.md`
+  - 开发中未新增字段，未调整现有结构——全部字段严格遵守 data-schema.md
+  - 如需新增时，先更新文档再改代码并在微信群通知
 
-- [ ] **H-2** 维护 `docs/contributions/c-order-storage.md`
-  - 每个阶段完成后记录：做了什么、改了哪些文件、怎么手动测试、遇到的问题和处理
+- [x] **H-2** 维护 `docs/contributions/c-order-storage.md`
+  - 已完整填写：当前进度、本次完成（A~G 七大模块摘要）、改动文件清单（7 个文件）、手动测试流程（4 步）、问题与处理（5 条记录）
   - 阶段性提交后同步更新
 
-- [ ] **H-3** 维护 `docs/ai-usage-report.md`
-  - 记录实际使用的 AI 工具/模型、用途、采纳内容、人工修改
+- [x] **H-3** 维护 `docs/ai-usage-report.md`
+  - 记录 Cline 模型用于：mock 数据生成、Store 架构设计、test-store 测试面板、文档批量更新
+  - 人工修改：修复 scope bug、`onclick`→`addEventListener`、ES module 跨域问题、数据完整性校验
 
-- [ ] **H-4** 提交信息遵循约定格式
-  - `feat: add mock data for 3 halls and 5 movies`
-  - `feat: implement user registration and login with localStorage`
-  - `feat: implement order booking with seat lock`
-  - `fix: sync seat state after payment`
+- [x] **H-4** 提交信息遵循约定格式
+  - 8 commits 均使用 `feat:` / `fix:` / `docs:` 前缀，语义清晰
+  - `feat: add mock data for 3 halls, 5 movies, 12 schedules with util functions`
+  - `feat: implement localStorage persistence layer and full store module (B-1~B-4)`
+  - `fix: rewrite test-store.html with addEventListener (no inline onclick)`
+  - 见 `git log --oneline` 完整记录
 
 ---
 
