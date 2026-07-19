@@ -42,7 +42,7 @@ export const hallSmall = {
     { rowLabel: "G", pattern: "XSSSSSSSAASSSSSSSSX", offsetX: 2, curveDepth: 8 },
     { rowLabel: "H", pattern: "XXSSSSSSAASSSSSSSXX", offsetX: 4, curveDepth: 9 },
     { rowLabel: "I", pattern: "XXXSSSSSAASSSSSSXXX", offsetX: 6, curveDepth: 10 },
-    { rowLabel: "J", pattern: "XXXXSSSSAASSSSSXXXX", offsetX: 8, curveDepth: 11 },
+    { rowLabel: "J", pattern: "XXXXSSSWAAWSSSSXXXX", offsetX: 8, curveDepth: 11 },
   ],
 };
 // 各排 S/W 数量：A=8, B=10, C=12, D=14, E=16, F=16, G=14, H=12, I=10, J=8 → 总计 104
@@ -68,7 +68,7 @@ export const hallMedium = {
     { rowLabel: "G", pattern: "XXSSSSSSSSSSSSAASSSSSSSSSSSSSXX", offsetX: 2, curveDepth: 10 },
     { rowLabel: "H", pattern: "XXXSSSSSSSSSSSAASSSSSSSSSSSSXXX", offsetX: 4, curveDepth: 11 },
     { rowLabel: "I", pattern: "XXXXSSSSSSSSSSAASSSSSSSSSSSXXXX", offsetX: 6, curveDepth: 12 },
-    { rowLabel: "J", pattern: "XXXXXSSSSSSSSSAASSSSSSSSSSXXXXX", offsetX: 8, curveDepth: 13 },
+    { rowLabel: "J", pattern: "XXXXXSSSSSSSSWAAWSSSSSSSSSXXXXX", offsetX: 8, curveDepth: 13 },
   ],
 };
 // 各排 S/W 数量：A=16, B=18, C=20, D=22, E=24, F=26, G=24, H=22, I=20, J=18 → 总计 210
@@ -94,7 +94,7 @@ export const hallLarge = {
     { rowLabel: "G", pattern: "XXXXXSSSSSSSSSSSSSSSSSAASSSSSSSSSSSSSSSSSSXXXXX", offsetX: 0, curveDepth: 12 },
     { rowLabel: "H", pattern: "XXXXXXSSSSSSSSSSSSSSSSAASSSSSSSSSSSSSSSSSXXXXXX", offsetX: 2, curveDepth: 13 },
     { rowLabel: "I", pattern: "XXXXXXXSSSSSSSSSSSSSSSAASSSSSSSSSSSSSSSSXXXXXXX", offsetX: 4, curveDepth: 14 },
-    { rowLabel: "J", pattern: "XXXXXXXXSSSSSSSSSSSSSSAASSSSSSSSSSSSSSSXXXXXXXX", offsetX: 6, curveDepth: 15 },
+    { rowLabel: "J", pattern: "XXXXXXXXSSSSSSSSSSSSSWAAWSSSSSSSSSSSSSSXXXXXXXX", offsetX: 6, curveDepth: 15 },
   ],
 };
 // 各排 S/W 数量：A=26, B=28, C=30, D=32, E=34, F=36, G=34, H=32, I=30, J=28 → 总计 310

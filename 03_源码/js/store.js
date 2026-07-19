@@ -213,7 +213,11 @@ export function createStore(initialState) {
     }
 
     // 从 LocalStorage 加载到内存状态
-    state.halls = loadFromStorage(STORAGE_KEYS.HALLS) || allMockData.halls;
+    // 影厅布局属于静态配置，始终使用当前代码版本，避免旧 LocalStorage
+    // 缓存阻止新增过道/无障碍座位等布局更新。座位 ID 数量不变时，
+    // 已有订单和 seatState 可以继续沿用。
+    state.halls = allMockData.halls;
+    saveToStorage(STORAGE_KEYS.HALLS, state.halls);
     state.movies = loadFromStorage(STORAGE_KEYS.MOVIES) || allMockData.movies;
     state.schedules = loadFromStorage(STORAGE_KEYS.SCHEDULES) || allMockData.schedules;
     state.users = loadFromStorage(STORAGE_KEYS.USERS) || allMockData.users;

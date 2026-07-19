@@ -54,11 +54,12 @@
           <div class="panel-head">
             <div>
               <h2>影厅选座</h2>
-              <p class="panel-note">点击绿色座位选择；键盘可用方向键移动、Enter 选择；已售和锁定座位不可选择。</p>
+              <p class="panel-note">桌面点击替换当前座位，Ctrl/Cmd + 点击可多选和拖选；移动端点击可直接增删。已售和锁定座位不可选择。</p>
             </div>
             <div class="legend" aria-label="座位状态图例">
               <span><i class="seat-dot available"></i>可选</span>
               <span><i class="seat-dot selected"></i>已选</span>
+              <span><i class="seat-dot accessible"></i>无障碍</span>
               <span><i class="seat-dot reserved"></i>锁定</span>
               <span><i class="seat-dot sold"></i>已售</span>
             </div>
@@ -73,7 +74,10 @@
               <p id="selection-feedback" class="selection-feedback">请选择与人数相同数量的座位。</p>
               <p id="hover-seat" class="hover-seat">悬停或使用方向键查看座位号</p>
             </div>
-            <button id="clear-selection" class="ghost-button" type="button">清空选择</button>
+            <div class="selection-actions">
+              <button id="clear-selection" class="ghost-button" type="button">清空选择</button>
+              <button id="submit-selection" class="primary-button" type="button" disabled>确认座位</button>
+            </div>
           </div>
         </section>
 

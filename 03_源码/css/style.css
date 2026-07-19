@@ -203,6 +203,11 @@ h2 {
   background: var(--warning);
 }
 
+.seat-dot.accessible {
+  background: var(--success);
+  border: 2px solid #2563eb;
+}
+
 .seat-dot.reserved {
   background: #fb7185;
 }
@@ -221,6 +226,17 @@ h2 {
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.72);
+}
+
+.selection-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .selection-feedback {
@@ -277,6 +293,10 @@ h2 {
   .selection-bar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .selection-actions > button {
+    flex: 1;
   }
 
   .panel {

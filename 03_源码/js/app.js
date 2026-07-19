@@ -7,12 +7,14 @@ store.initStore();
 const seatCanvas = document.querySelector("#seat-canvas");
 const scheduleSelect = document.querySelector("#schedule-select");
 const peopleCountInput = document.querySelector("#people-count");
+const ticketTypeSelect = document.querySelector("#ticket-type");
 const recommendationButton = document.querySelector("#recommend-button");
 const recommendationList = document.querySelector("#recommendation-list");
 const selectionText = document.querySelector("#selection-text");
 const selectionFeedback = document.querySelector("#selection-feedback");
 const hoverSeatText = document.querySelector("#hover-seat");
 const clearSelectionButton = document.querySelector("#clear-selection");
+const submitSelectionButton = document.querySelector("#submit-selection");
 const orderList = document.querySelector("#order-list");
 
 const schedules = store.getSchedules();
@@ -70,6 +72,21 @@ clearSelectionButton?.addEventListener("click", () => {
   setFeedback("已清空所选座位。", "info");
 });
 
+submitSelectionButton?.addEventListener("click", () => {
+  const selectedSeatIds = seatMap.getSelectedSeatIds();
+  const peopleCount = getPeopleCount();
+  if (selectedSeatIds.length !== peopleCount) return;
+
+  const detail = {
+    scheduleId: currentScheduleId,
+    selectedSeatIds: [...selectedSeatIds],
+    ticketType: ticketTypeSelect?.value || "single",
+    peopleCount,
+  };
+  window.dispatchEvent(new CustomEvent("smartcinema:seat-selection-submit", { detail }));
+  setFeedback(`已确认座位：${selectedSeatIds.join("、")}。等待 D 模块接入登录与订单提交。`, "success");
+});
+
 function populateSchedules() {
   if (!scheduleSelect) return;
   scheduleSelect.innerHTML = schedules.map((schedule) => {
@@ -123,6 +140,9 @@ function renderSelection(selectedSeatIds) {
   selectionText.textContent = selectedSeatIds.length
     ? `已选 ${selectedSeatIds.length} 个：${selectedSeatIds.join("、")}`
     : "尚未选择座位";
+  if (submitSelectionButton) {
+    submitSelectionButton.disabled = selectedSeatIds.length !== getPeopleCount();
+  }
 }
 
 function setFeedback(message, type) {

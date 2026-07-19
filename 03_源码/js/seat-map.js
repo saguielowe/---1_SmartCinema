@@ -25,6 +25,9 @@ export function createSeatMap(canvas, initialOptions = {}) {
   let selectedSeatIds = new Set(initialOptions.selectedSeatIds || []);
   let hitAreas = [];
   let focusedSeatId = "";
+  let activeSelectedSeatId = "";
+  let dragState = null;
+  let suppressNextClick = false;
 
   function update(nextOptions = {}) {
     options = normalizeOptions({ ...options, ...nextOptions });
@@ -91,9 +94,17 @@ export function createSeatMap(canvas, initialOptions = {}) {
         radius: seatRadius,
         isHighlighted: options.highlightedSeatIds.includes(seatId),
         isFocused: focusedSeatId === seatId,
+        isAccessible: cellType === "W",
       });
 
-      hitAreas.push({ x, y, radius: Math.max(10, seatRadius + 5), seatId, status: storedStatus });
+      hitAreas.push({
+        x,
+        y,
+        radius: Math.max(10, seatRadius + 5),
+        seatId,
+        status: storedStatus,
+        seatType: cellType,
+      });
     }
 
     ctx.save();
@@ -105,7 +116,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
     ctx.restore();
   }
 
-  function drawSeat({ x, y, seatId, status, radius, isHighlighted, isFocused }) {
+  function drawSeat({ x, y, seatId, status, radius, isHighlighted, isFocused, isAccessible }) {
     ctx.save();
 
     if (isHighlighted) {
@@ -119,6 +130,22 @@ export function createSeatMap(canvas, initialOptions = {}) {
     ctx.fillStyle = STATUS_COLORS[status] || STATUS_COLORS.available;
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.fill();
+
+    if (isAccessible) {
+      ctx.beginPath();
+      ctx.strokeStyle = "#2563eb";
+      ctx.lineWidth = 2;
+      ctx.arc(x, y, radius + 3, 0, Math.PI * 2);
+      ctx.stroke();
+
+      if (radius >= 6) {
+        ctx.fillStyle = "#ffffff";
+        ctx.font = `700 ${Math.max(7, radius)}px Segoe UI`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("W", x, y + 0.5);
+      }
+    }
 
     if (status === "selected") {
       ctx.strokeStyle = "#92400e";
@@ -145,11 +172,16 @@ export function createSeatMap(canvas, initialOptions = {}) {
   }
 
   function onCanvasClick(event) {
+    if (suppressNextClick) {
+      suppressNextClick = false;
+      return;
+    }
     const point = toCanvasPoint(event);
     const hit = findHitArea(point.x, point.y);
     if (!hit || hit.status !== "available") return;
     focusedSeatId = hit.seatId;
-    toggleSeat(hit.seatId);
+    const isTouch = event.pointerType === "touch";
+    selectSeat(hit.seatId, { multi: event.ctrlKey || event.metaKey || isTouch });
   }
 
   function onCanvasKeyDown(event) {
@@ -180,20 +212,29 @@ export function createSeatMap(canvas, initialOptions = {}) {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       focusedSeatId = availableSeats[index].seatId;
-      toggleSeat(focusedSeatId);
+      selectSeat(focusedSeatId, { multi: event.ctrlKey || event.metaKey });
     }
   }
 
-  function toggleSeat(seatId) {
+  function selectSeat(seatId, { multi = false } = {}) {
     if (selectedSeatIds.has(seatId)) {
       selectedSeatIds.delete(seatId);
+      if (activeSelectedSeatId === seatId) {
+        activeSelectedSeatId = [...selectedSeatIds].at(-1) || "";
+      }
+    } else if (multi) {
+      if (!canAddSelection()) return;
+      selectedSeatIds.add(seatId);
+      activeSelectedSeatId = seatId;
     } else {
-      const maxSelected = Math.max(1, Number(options.maxSelected) || 1);
-      if (selectedSeatIds.size >= maxSelected) {
-        options.onSelectionLimit(maxSelected);
-        return;
+      if (selectedSeatIds.size > 0) {
+        const replaceId = selectedSeatIds.has(activeSelectedSeatId)
+          ? activeSelectedSeatId
+          : [...selectedSeatIds].at(-1);
+        selectedSeatIds.delete(replaceId);
       }
       selectedSeatIds.add(seatId);
+      activeSelectedSeatId = seatId;
     }
 
     options.onSeatFocus({ seatId, status: "available" });
@@ -202,9 +243,64 @@ export function createSeatMap(canvas, initialOptions = {}) {
     emitSelectionChange();
   }
 
+  function canAddSelection() {
+    const maxSelected = Math.max(1, Number(options.maxSelected) || 1);
+    if (selectedSeatIds.size < maxSelected) return true;
+    options.onSelectionLimit(maxSelected);
+    return false;
+  }
+
+  function onPointerDown(event) {
+    if (!(event.ctrlKey || event.metaKey) || event.pointerType === "touch") return;
+    const point = toCanvasPoint(event);
+    const hit = findHitArea(point.x, point.y);
+    if (!hit || hit.status !== "available") return;
+
+    event.preventDefault();
+    dragState = {
+      mode: selectedSeatIds.has(hit.seatId) ? "remove" : "add",
+      visited: new Set(),
+    };
+    canvas.setPointerCapture?.(event.pointerId);
+    applyDragSeat(hit);
+  }
+
+  function applyDragSeat(hit) {
+    if (!dragState || dragState.visited.has(hit.seatId) || hit.status !== "available") return;
+    dragState.visited.add(hit.seatId);
+
+    if (dragState.mode === "add") {
+      if (!selectedSeatIds.has(hit.seatId)) {
+        if (!canAddSelection()) return;
+        selectedSeatIds.add(hit.seatId);
+      }
+    } else {
+      selectedSeatIds.delete(hit.seatId);
+    }
+
+    focusedSeatId = hit.seatId;
+    activeSelectedSeatId = hit.seatId;
+    options.onSeatFocus({ seatId: hit.seatId, status: hit.status });
+    render();
+    emitSelectionChange();
+  }
+
+  function endPointerDrag(event) {
+    if (!dragState) return;
+    canvas.releasePointerCapture?.(event.pointerId);
+    dragState = null;
+    suppressNextClick = true;
+    window.setTimeout(() => {
+      suppressNextClick = false;
+    }, 350);
+  }
+
   function onCanvasMove(event) {
     const point = toCanvasPoint(event);
     const hit = findHitArea(point.x, point.y);
+    if (dragState && hit) {
+      applyDragSeat(hit);
+    }
     canvas.style.cursor = hit?.status === "available" ? "pointer" : "not-allowed";
     canvas.title = hit ? `${hit.seatId}（${statusLabel(hit.status)}）` : "";
     options.onSeatFocus(hit ? { seatId: hit.seatId, status: hit.status } : null);
@@ -244,12 +340,14 @@ export function createSeatMap(canvas, initialOptions = {}) {
   function clearSelection({ notify = true } = {}) {
     if (selectedSeatIds.size === 0) return;
     selectedSeatIds.clear();
+    activeSelectedSeatId = "";
     render();
     if (notify) emitSelectionChange();
   }
 
   function setSelectedSeatIds(seatIds) {
     selectedSeatIds = new Set((seatIds || []).slice(0, options.maxSelected));
+    activeSelectedSeatId = [...selectedSeatIds].at(-1) || "";
     removeUnavailableSelections();
     render();
     emitSelectionChange();
@@ -263,7 +361,10 @@ export function createSeatMap(canvas, initialOptions = {}) {
   }
 
   canvas.addEventListener("click", onCanvasClick);
-  canvas.addEventListener("mousemove", onCanvasMove);
+  canvas.addEventListener("pointerdown", onPointerDown);
+  canvas.addEventListener("pointerup", endPointerDrag);
+  canvas.addEventListener("pointercancel", endPointerDrag);
+  canvas.addEventListener("pointermove", onCanvasMove);
   canvas.addEventListener("keydown", onCanvasKeyDown);
   canvas.addEventListener("focus", () => {
     if (!focusedSeatId) {
@@ -293,7 +394,10 @@ export function createSeatMap(canvas, initialOptions = {}) {
     getSelectedSeatIds: () => [...selectedSeatIds],
     destroy() {
       canvas.removeEventListener("click", onCanvasClick);
-      canvas.removeEventListener("mousemove", onCanvasMove);
+      canvas.removeEventListener("pointerdown", onPointerDown);
+      canvas.removeEventListener("pointerup", endPointerDrag);
+      canvas.removeEventListener("pointercancel", endPointerDrag);
+      canvas.removeEventListener("pointermove", onCanvasMove);
       canvas.removeEventListener("keydown", onCanvasKeyDown);
     },
   };
@@ -319,7 +423,8 @@ function normalizeOptions(options) {
 function getCurveOffset(cellIndex, length, curveDepth) {
   const center = (length - 1) / 2;
   const distance = Math.abs(cellIndex - center);
-  return (distance / Math.max(center, 1)) * curveDepth;
+  const ratio = distance / Math.max(center, 1);
+  return Math.pow(ratio, 1.65) * curveDepth * 1.65;
 }
 
 function statusLabel(status) {
