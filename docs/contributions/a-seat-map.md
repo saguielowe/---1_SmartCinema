@@ -1,21 +1,74 @@
-# A：选座组件记录
+# A：Canvas 选座组件记录
 
 ## 当前进度
 
-- 待认领。
+- 已完成第一版 Canvas 交互选座与 C 模块座位状态接线。
+- 开发分支：`feature/canvas-seatmap`。
+- 推荐算法和确认下单按钮不属于本模块，本模块只输出选择结果。
 
 ## 本次完成
 
-- 待补充。
+- 根据 C 的 `hall.rows[].pattern` 和 `seatState` 绘制三种影厅。
+- 修复座位编号：`X`（空白）和 `A`（过道）不计入编号，与 C 的 `generateSeatState()` 一致。
+- 支持鼠标点击选择、再次点击取消。
+- `sold` / `reserved` 座位不可选择。
+- 按购票人数限制最多选择数量。
+- 切换场次时清空选择并重置键盘焦点。
+- 支持方向键移动焦点、Enter/空格选择。
+- 显示当前指向座位编号，解决大厅座位密集时编号难以辨认的问题。
+- 接收 B 的 `highlightedSeatIds` 并以青色光圈高亮。
+- 通过自定义事件和公开接口输出 `selectedSeatIds`。
+
+## A → D/C 对接接口
+
+页面可监听：
+
+```js
+window.addEventListener("smartcinema:seat-selection-change", (event) => {
+  const { scheduleId, selectedSeatIds } = event.detail;
+});
+```
+
+也可读取：
+
+```js
+window.__seatSelection.getScheduleId();
+window.__seatSelection.getSelectedSeatIds();
+window.__seatSelection.clear();
+```
+
+D 模块确认人数与登录状态后，把结果传给 C：
+
+```js
+store.createOrder({
+  scheduleId,
+  seatIds: selectedSeatIds,
+  ticketType,
+  peopleCount,
+});
+```
 
 ## 改动文件
 
-- 待补充。
+| 文件 | 说明 |
+| --- | --- |
+| `03_源码/js/seat-map.js` | 可交互 Canvas、统一编号、命中检测、键盘操作和选择接口 |
+| `03_源码/js/app.js` | 场次切换、人数限制、A/C 数据接线和选择结果输出 |
+| `03_源码/index.html` | 场次、选择结果、座位提示和完整图例 |
+| `03_源码/css/style.css` | 选择状态栏、锁定图例和焦点样式 |
 
-## 手动测试
+## 功能验收
 
-- 待补充。
+1. 打开 `http://localhost:8080/index.html`。
+2. 场次列表应显示 12 个场次，可切换大/中/小厅。
+3. 大厅/中厅/小厅分别显示来自 C 的 320/220/130 条座位状态。
+4. 默认人数为 2，选择两个可用座位后显示座位 ID；第三个座位被人数上限拦截。
+5. 切换场次后选择清空，再次操作从当前影厅第一个可用座位开始。
+6. 聚焦 Canvas 后使用方向键移动，按 Enter 选择；座位提示同步更新。
+7. 点击“显示推荐位置”后，B 返回且当前可用的推荐座位显示青色光圈。
 
-## 问题与处理
+## 已知待办
 
-- 待补充。
+- D 模块需要增加正式登录、确认购票、支付/取消/退款 UI。
+- B 模块需要用真实场次、人数、偏好和座位状态替换当前固定推荐结果。
+- C 模块的影厅 `capacity` 字段与 pattern 实际座位数不一致，A 当前以 `seatState.length` 为准。

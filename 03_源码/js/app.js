@@ -1,147 +1,181 @@
-/**
- * SmartCinema 页面整合入口（D 模块接线点）
- * ==========================================
- * 职责：
- *   1. 初始化 Store（从 LS 恢复或首次写入 mock 数据）
- *   2. 接线 A（Canvas 座位图）、B（推荐引擎）、C（Store）模块
- *   3. 渲染推荐结果和订单列表到 DOM
- *
- * 本文件由 D 模块负责人维护，C 模块仅对接线提供 Store 实例和接口。
- * 当前版本使用新的 Store 单例（import { store } from "./store.js"），
- * 替代了旧的 createStore({ hall, seatState }) 占位。
- */
 import { store } from "./store.js";
-import { drawSeatMap } from "./seat-map.js";
+import { createSeatMap } from "./seat-map.js";
 import { getDefaultRecommendation } from "./recommendation.js";
 
-// ===========================================================================
-// 一、初始化 Store
-// ===========================================================================
-
-/**
- * 应用启动时调用 initStore()：
- * - 首次运行 → 将 allMockData 写入 LS 并加载
- * - 非首次 → 从 LS 恢复所有数据（包括登录会话和锁票定时器）
- * - 返回 { isFirstRun: boolean }
- */
-const initResult = store.initStore();
-console.log("[App] Store 初始化完成, isFirstRun:", initResult.isFirstRun);
-
-// ===========================================================================
-// 二、DOM 引用
-// ===========================================================================
+store.initStore();
 
 const seatCanvas = document.querySelector("#seat-canvas");
+const scheduleSelect = document.querySelector("#schedule-select");
+const peopleCountInput = document.querySelector("#people-count");
+const recommendationButton = document.querySelector("#recommend-button");
 const recommendationList = document.querySelector("#recommendation-list");
+const selectionText = document.querySelector("#selection-text");
+const selectionFeedback = document.querySelector("#selection-feedback");
+const hoverSeatText = document.querySelector("#hover-seat");
+const clearSelectionButton = document.querySelector("#clear-selection");
 const orderList = document.querySelector("#order-list");
 
-// ===========================================================================
-// 三、接线 A：Canvas 座位图
-// ===========================================================================
+const schedules = store.getSchedules();
+let currentScheduleId = schedules[0]?.scheduleId || "s001";
+let recommendation = getDefaultRecommendation();
 
-/**
- * 初始加载时使用默认场次 s001 的数据画座位图。
- * drawSeatMap 需要 { hall, seatState, highlightedSeatIds }。
- * - hall: 从 Store 根据 scheduleId 获取对应影厅
- * - seatState: 从 Store 获取当前场次的座位状态
- * - highlightedSeatIds: 来自推荐模块
- *
- * 注意：后续 A 和 D 联调时，scheduleId 应由用户选择的场次动态传入，
- * 而非写死 s001。
- */
-const defaultScheduleId = "s001";
-const defaultSchedule = store.getScheduleById(defaultScheduleId);
-const defaultHall = defaultSchedule ? store.getHallById(defaultSchedule.hallId) : null;
-const defaultSeatState = store.getSeatStateBySchedule(defaultScheduleId);
+populateSchedules();
 
-const recommendation = getDefaultRecommendation();
+const seatMap = createSeatMap(seatCanvas, {
+  ...getSeatMapData(),
+  maxSelected: getPeopleCount(),
+  onSelectionChange: handleSelectionChange,
+  onSelectionLimit: (limit) => {
+    setFeedback(`最多选择 ${limit} 个座位，请先取消已选座位或修改人数。`, "warning");
+  },
+  onSeatFocus: renderFocusedSeat,
+});
 
-if (seatCanvas && defaultHall && defaultSeatState.length > 0) {
-  drawSeatMap(seatCanvas, {
-    hall: defaultHall,
-    seatState: defaultSeatState,
-    highlightedSeatIds: recommendation.recommendedSeatIds,
-  });
-  console.log("[App] 座位图已绘制 (schedule=" + defaultScheduleId + ", hall=" + defaultHall.hallId + ", seats=" + defaultSeatState.length + ")");
-} else {
-  console.warn("[App] 座位图未绘制：seatCanvas=" + !!seatCanvas + " hall=" + !!defaultHall + " seatState=" + defaultSeatState.length);
+renderRecommendation();
+renderSelection([]);
+renderOrders();
+
+scheduleSelect?.addEventListener("change", () => {
+  currentScheduleId = scheduleSelect.value;
+  seatMap.clearSelection({ notify: false });
+  seatMap.resetFocus();
+  seatMap.update({ ...getSeatMapData(), maxSelected: getPeopleCount() });
+  renderSelection([]);
+  renderOrders();
+  setFeedback("已切换场次，请重新选择座位。", "info");
+});
+
+peopleCountInput?.addEventListener("change", () => {
+  const count = getPeopleCount();
+  peopleCountInput.value = String(count);
+  seatMap.update({ maxSelected: count });
+
+  const selected = seatMap.getSelectedSeatIds();
+  if (selected.length > count) {
+    seatMap.setSelectedSeatIds(selected.slice(0, count));
+  } else {
+    renderSelection(selected);
+  }
+});
+
+recommendationButton?.addEventListener("click", () => {
+  recommendation = getDefaultRecommendation();
+  seatMap.update({ highlightedSeatIds: getAvailableRecommendationIds() });
+  renderRecommendation();
+  setFeedback("推荐座位已用青色光圈标出；推荐逻辑由 B 模块继续完善。", "info");
+});
+
+clearSelectionButton?.addEventListener("click", () => {
+  seatMap.clearSelection();
+  setFeedback("已清空所选座位。", "info");
+});
+
+function populateSchedules() {
+  if (!scheduleSelect) return;
+  scheduleSelect.innerHTML = schedules.map((schedule) => {
+    const movie = store.getMovieById(schedule.movieId);
+    const hall = store.getHallById(schedule.hallId);
+    const label = `${schedule.scheduleId} · ${movie?.title || "未知影片"} · ${hall?.hallName || "未知影厅"} · ${schedule.date} ${schedule.startTime}`;
+    return `<option value="${schedule.scheduleId}">${label}</option>`;
+  }).join("");
+  scheduleSelect.value = currentScheduleId;
 }
 
-// ===========================================================================
-// 四、接线 B：推荐结果
-// ===========================================================================
+function getSeatMapData() {
+  const schedule = store.getScheduleById(currentScheduleId);
+  const hall = schedule ? store.getHallById(schedule.hallId) : null;
+  const seatState = store.getSeatStateBySchedule(currentScheduleId);
+  return {
+    hall,
+    seatState,
+    highlightedSeatIds: getAvailableRecommendationIds(seatState),
+  };
+}
 
-renderRecommendation(recommendation);
+function getAvailableRecommendationIds(seatState = store.getSeatStateBySchedule(currentScheduleId)) {
+  const available = new Set(
+    seatState.filter((seat) => seat.status === "available").map((seat) => seat.seatId),
+  );
+  return recommendation.recommendedSeatIds.filter((seatId) => available.has(seatId));
+}
 
-/**
- * 渲染推荐结果到 DOM。
- * recommendation 来自 B 模块的 getDefaultRecommendation()。
- *
- * @param {object} result - recommendationResult schema
- */
-function renderRecommendation(result) {
+function getPeopleCount() {
+  const parsed = Number.parseInt(peopleCountInput?.value || "1", 10);
+  return Math.min(8, Math.max(1, Number.isFinite(parsed) ? parsed : 1));
+}
+
+function handleSelectionChange(selectedSeatIds) {
+  renderSelection(selectedSeatIds);
+  const required = getPeopleCount();
+  if (selectedSeatIds.length === required) {
+    setFeedback("座位数量已满足人数要求，可交给 D 模块接入确认购票按钮。", "success");
+  } else {
+    setFeedback(`还需选择 ${required - selectedSeatIds.length} 个座位。`, "info");
+  }
+
+  window.dispatchEvent(new CustomEvent("smartcinema:seat-selection-change", {
+    detail: { scheduleId: currentScheduleId, selectedSeatIds: [...selectedSeatIds] },
+  }));
+}
+
+function renderSelection(selectedSeatIds) {
+  if (!selectionText) return;
+  selectionText.textContent = selectedSeatIds.length
+    ? `已选 ${selectedSeatIds.length} 个：${selectedSeatIds.join("、")}`
+    : "尚未选择座位";
+}
+
+function setFeedback(message, type) {
+  if (!selectionFeedback) return;
+  selectionFeedback.textContent = message;
+  selectionFeedback.dataset.type = type;
+}
+
+function renderFocusedSeat(seat) {
+  if (!hoverSeatText) return;
+  const label = { available: "可选", reserved: "已锁定", sold: "已售" }[seat?.status];
+  hoverSeatText.textContent = seat
+    ? `当前座位：${seat.seatId}（${label || seat.status}）`
+    : "悬停或使用方向键查看座位号";
+}
+
+function renderRecommendation() {
   if (!recommendationList) return;
   recommendationList.innerHTML = `
-    <li>推荐座位：${result.recommendedSeatIds.join(", ")}</li>
-    <li>备选座位：${result.fallbackSeatIds.join(", ")}</li>
-    <li>推荐理由：${result.reasons.join("；")}</li>
+    <li>推荐座位：${recommendation.recommendedSeatIds.join("、")}</li>
+    <li>备选座位：${recommendation.fallbackSeatIds.join("、")}</li>
+    <li>推荐理由：${recommendation.reasons.join("；")}</li>
   `;
 }
 
-// ===========================================================================
-// 五、接线 C：订单中心
-// ===========================================================================
-
-renderOrders();
-
-/**
- * 渲染订单列表和当前座位状态到 DOM。
- * 调用 Store 的 getOrders() 和 getSeatStateBySchedule()。
- *
- * 普通用户看到自己的订单，管理员看到全部订单。
- * 当前以默认场次 s001 展示座位状态统计。
- */
 function renderOrders() {
   if (!orderList) return;
 
   const orders = store.getOrders();
   const currentUser = store.getCurrentUser();
-  const seatState = store.getSeatStateBySchedule(defaultScheduleId);
-  const remaining = store.getRemainingSeats(defaultScheduleId);
+  const seatState = store.getSeatStateBySchedule(currentScheduleId);
+  const available = seatState.filter((seat) => seat.status === "available").length;
+  const reserved = seatState.filter((seat) => seat.status === "reserved").length;
+  const sold = seatState.filter((seat) => seat.status === "sold").length;
 
-  // 订单列表
-  let orderHtml = "";
-  if (orders.length === 0) {
-    orderHtml = "<li>暂无订单</li>";
-  } else {
-    orderHtml = orders.slice(0, 5).map((o) => {
-      const sched = store.getScheduleById(o.scheduleId);
-      const movie = sched ? store.getMovieById(sched.movieId) : null;
-      return `<li>[${o.status}] ${o.orderId} — ${movie?.title || "?"} — ${o.seatIds.join(",")} — ¥${o.totalPrice}</li>`;
-    }).join("");
-  }
-
-  // 登录状态
-  const loginInfo = currentUser
-    ? `当前用户：${currentUser.username}（${currentUser.role}）`
-    : "未登录（testuser/123456 登录）";
-
-  // 座位状态统计
-  const available = seatState.filter((s) => s.status === "available").length;
-  const sold = seatState.filter((s) => s.status === "sold").length;
+  const orderHtml = orders.length
+    ? orders.slice(0, 5).map((order) => `
+        <li>[${order.status}] ${order.seatIds.join("、")} · ¥${order.totalPrice}</li>
+      `).join("")
+    : "<li>暂无订单</li>";
 
   orderList.innerHTML = `
-    <li>${loginInfo}</li>
-    <li>场次 ${defaultScheduleId}：总 ${seatState.length} 座 | 可选 ${available} | 已售 ${sold} | 余票 ${remaining}</li>
-    <li>订单数：${orders.length} 条</li>
+    <li>${currentUser ? `当前用户：${currentUser.username}（${currentUser.role}）` : "当前未登录"}</li>
+    <li>场次 ${currentScheduleId}：总 ${seatState.length} · 可选 ${available} · 锁定 ${reserved} · 已售 ${sold}</li>
+    <li>当前用户订单：${orders.length} 条</li>
     ${orderHtml}
   `;
 }
 
-// ===========================================================================
-// 六、导出 Store 实例供 Console 调试
-// ===========================================================================
-
-// 挂到 window 方便在浏览器 Console 中直接测试
+// D/C 联调时可读取该接口，不需要访问 A 模块内部状态。
+window.__seatSelection = {
+  getScheduleId: () => currentScheduleId,
+  getSelectedSeatIds: () => seatMap.getSelectedSeatIds(),
+  clear: () => seatMap.clearSelection(),
+};
 window.__store = store;
-console.log("[App] Store 已挂载到 window.__store，可在 Console 中调用 store.login('testuser','123456') 等测试");

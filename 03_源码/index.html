@@ -18,31 +18,35 @@
 
       <main class="page-grid">
         <section class="panel form-panel">
-          <h2>用户与购票条件</h2>
-          <p class="panel-note">这是组内演示样例，用来说明页面位置和数据怎么接；认领模块后请自行完成对应功能。</p>
-          <form class="ticket-form">
+          <h2>购票条件</h2>
+          <p class="panel-note">选择场次和人数后，可在座位图中直接点击可用座位。</p>
+          <form class="ticket-form" onsubmit="return false">
+            <label>
+              场次
+              <select id="schedule-select" aria-label="场次"></select>
+            </label>
             <label>
               票种
-              <select>
-                <option>个人票</option>
-                <option>情侣票</option>
-                <option>家庭票</option>
-                <option>团体票</option>
+              <select id="ticket-type" aria-label="票种">
+                <option value="single">个人票</option>
+                <option value="couple">情侣票</option>
+                <option value="family">家庭票</option>
+                <option value="group">团体票</option>
               </select>
             </label>
             <label>
               人数
-              <input type="number" min="1" value="2" />
+              <input id="people-count" type="number" min="1" max="8" value="2" aria-label="人数" />
             </label>
             <label>
               偏好
-              <select>
-                <option>中间区域优先</option>
-                <option>后排优先</option>
-                <option>靠过道优先</option>
+              <select id="preference" aria-label="偏好">
+                <option value="center">中间区域优先</option>
+                <option value="back">后排优先</option>
+                <option value="aisle">靠过道优先</option>
               </select>
             </label>
-            <button type="button" class="primary-button">生成推荐</button>
+            <button id="recommend-button" type="button" class="primary-button">显示推荐位置</button>
           </form>
         </section>
 
@@ -50,36 +54,40 @@
           <div class="panel-head">
             <div>
               <h2>影厅选座</h2>
-              <p class="panel-note">当前只画出示意座位图；点击选座、多选和推荐联动由认领该模块的同学实现。</p>
+              <p class="panel-note">点击绿色座位选择；键盘可用方向键移动、Enter 选择；已售和锁定座位不可选择。</p>
             </div>
-            <div class="legend">
+            <div class="legend" aria-label="座位状态图例">
               <span><i class="seat-dot available"></i>可选</span>
               <span><i class="seat-dot selected"></i>已选</span>
+              <span><i class="seat-dot reserved"></i>锁定</span>
               <span><i class="seat-dot sold"></i>已售</span>
             </div>
           </div>
 
           <div class="screen-label">银幕 SCREEN</div>
-          <canvas id="seat-canvas" width="960" height="560" aria-label="影厅座位图"></canvas>
+          <canvas id="seat-canvas" width="960" height="560" tabindex="0" aria-label="影厅座位图"></canvas>
+
+          <div class="selection-bar" aria-live="polite">
+            <div>
+              <strong id="selection-text">尚未选择座位</strong>
+              <p id="selection-feedback" class="selection-feedback">请选择与人数相同数量的座位。</p>
+              <p id="hover-seat" class="hover-seat">悬停或使用方向键查看座位号</p>
+            </div>
+            <button id="clear-selection" class="ghost-button" type="button">清空选择</button>
+          </div>
         </section>
 
         <aside class="panel side-panel">
           <section>
             <h2>推荐结果</h2>
-            <p class="panel-note">这是推荐结果的展示位置，规则和实际结果由推荐模块实现。</p>
-            <ul class="result-list" id="recommendation-list">
-              <li>推荐座位：待接入</li>
-              <li>推荐理由：待接入</li>
-            </ul>
+            <p class="panel-note">A 负责高亮结果；实际推荐规则由 B 模块实现。</p>
+            <ul class="result-list" id="recommendation-list"></ul>
           </section>
 
           <section>
             <h2>订单中心</h2>
-            <p class="panel-note">这是订单和热度信息的展示位置，登录、订单流转和存储需要自行实现。</p>
-            <ul class="result-list" id="order-list">
-              <li>当前订单：待接入</li>
-              <li>热度统计：待接入</li>
-            </ul>
+            <p class="panel-note">以下数据直接来自 C 模块 Store。</p>
+            <ul class="result-list" id="order-list"></ul>
           </section>
         </aside>
       </main>
