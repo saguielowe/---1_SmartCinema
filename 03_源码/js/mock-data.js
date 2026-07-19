@@ -7,7 +7,7 @@
  *   - 排号：rowLabel（A-J）
  *   - 座位号：该排中第几个 S 或 W（从 1 开始，跳过 A 和 X）
  *
- * 影厅规模：三套预设影厅，均为 10 排，座位总数分别约 100 / 200 / 300。
+ * 影厅规模：小/中/大厅均为 10 排，每排分别为 10 / 20 / 30 座。
  * pattern 约定：
  *   S - 普通座位
  *   A - 过道（不计入座位数）
@@ -18,86 +18,64 @@
  */
 
 // =============================================================================
-// 一、影厅 mock 数据（3 套预设，均为 10 排）
+// 一、影厅 mock 数据（10 排 × 10/20/30 座）
 // =============================================================================
 
+const TEN_ROW_LABELS = "ABCDEFGHIJ".split("");
+
+function createTenRowHall(seatsPerRow, baseCurveDepth) {
+  const half = seatsPerRow / 2;
+  return TEN_ROW_LABELS.map((rowLabel, rowIndex) => {
+    const isLastRow = rowIndex === TEN_ROW_LABELS.length - 1;
+    const left = isLastRow ? `${"S".repeat(half - 1)}W` : "S".repeat(half);
+    const right = isLastRow ? `W${"S".repeat(half - 1)}` : "S".repeat(half);
+    return {
+      rowLabel,
+      pattern: `${left}AA${right}`,
+      offsetX: (rowIndex - 4.5) * 0.9,
+      curveDepth: baseCurveDepth + rowIndex * 0.65,
+    };
+  });
+}
+
 /**
- * 小厅「星光厅」：约 104 座（100 S + 0 W + 0 暂不计的辅助位）
- * pattern 由两侧向中间逐渐增宽，模拟弧形排布。
+ * 小厅「星光厅」：10 排 × 每排 10 座 = 100 座。
  */
 export const hallSmall = {
   hallId: "hall-small",
   hallName: "星光厅",
   hallType: "small",
-  capacity: 104,
+  capacity: 100,
   rowCount: 10,
   screenLabel: "银幕",
-  rows: [
-    { rowLabel: "A", pattern: "XXXXSSSSAASSSSSXXXX", offsetX: -8, curveDepth: 12 },
-    { rowLabel: "B", pattern: "XXXSSSSSAASSSSSSXXX", offsetX: -6, curveDepth: 11 },
-    { rowLabel: "C", pattern: "XXSSSSSSAASSSSSSSXX", offsetX: -4, curveDepth: 10 },
-    { rowLabel: "D", pattern: "XSSSSSSSAASSSSSSSSX", offsetX: -2, curveDepth: 9 },
-    { rowLabel: "E", pattern: "SSSSSSSSAASSSSSSSSS", offsetX: 0, curveDepth: 8 },
-    { rowLabel: "F", pattern: "SSSSSSSSAASSSSSSSSS", offsetX: 0, curveDepth: 7 },
-    { rowLabel: "G", pattern: "XSSSSSSSAASSSSSSSSX", offsetX: 2, curveDepth: 8 },
-    { rowLabel: "H", pattern: "XXSSSSSSAASSSSSSSXX", offsetX: 4, curveDepth: 9 },
-    { rowLabel: "I", pattern: "XXXSSSSSAASSSSSSXXX", offsetX: 6, curveDepth: 10 },
-    { rowLabel: "J", pattern: "XXXXSSSWAAWSSSSXXXX", offsetX: 8, curveDepth: 11 },
-  ],
+  rows: createTenRowHall(10, 11),
 };
-// 各排 S/W 数量：A=8, B=10, C=12, D=14, E=16, F=16, G=14, H=12, I=10, J=8 → 总计 104
 
 /**
- * 中厅「银幕厅」：约 210 座（210 S）
- * 较宽排布，中间过道 AA 将座位分为左右两区。
+ * 中厅「银幕厅」：10 排 × 每排 20 座 = 200 座。
  */
 export const hallMedium = {
   hallId: "hall-medium",
   hallName: "银幕厅",
   hallType: "medium",
-  capacity: 210,
+  capacity: 200,
   rowCount: 10,
   screenLabel: "银幕",
-  rows: [
-    { rowLabel: "A", pattern: "XXXXXXSSSSSSSSAASSSSSSSSSXXXXXX", offsetX: -10, curveDepth: 14 },
-    { rowLabel: "B", pattern: "XXXXXSSSSSSSSSAASSSSSSSSSSXXXXX", offsetX: -8, curveDepth: 13 },
-    { rowLabel: "C", pattern: "XXXXSSSSSSSSSSAASSSSSSSSSSSXXXX", offsetX: -6, curveDepth: 12 },
-    { rowLabel: "D", pattern: "XXXSSSSSSSSSSSAASSSSSSSSSSSSXXX", offsetX: -4, curveDepth: 11 },
-    { rowLabel: "E", pattern: "XXSSSSSSSSSSSSAASSSSSSSSSSSSSXX", offsetX: -2, curveDepth: 10 },
-    { rowLabel: "F", pattern: "XSSSSSSSSSSSSSAASSSSSSSSSSSSSSX", offsetX: 0, curveDepth: 9 },
-    { rowLabel: "G", pattern: "XXSSSSSSSSSSSSAASSSSSSSSSSSSSXX", offsetX: 2, curveDepth: 10 },
-    { rowLabel: "H", pattern: "XXXSSSSSSSSSSSAASSSSSSSSSSSSXXX", offsetX: 4, curveDepth: 11 },
-    { rowLabel: "I", pattern: "XXXXSSSSSSSSSSAASSSSSSSSSSSXXXX", offsetX: 6, curveDepth: 12 },
-    { rowLabel: "J", pattern: "XXXXXSSSSSSSSWAAWSSSSSSSSSXXXXX", offsetX: 8, curveDepth: 13 },
-  ],
+  rows: createTenRowHall(20, 13),
 };
-// 各排 S/W 数量：A=16, B=18, C=20, D=22, E=24, F=26, G=24, H=22, I=20, J=18 → 总计 210
 
 /**
- * 大厅「巨幕厅」：约 310 座（310 S）
- * 超宽排布，中间过道 AA 分左右区，两侧大量 X 做弧形收缩。
+ * 大厅「巨幕厅」：10 排 × 每排 30 座 = 300 座。
  */
 export const hallLarge = {
   hallId: "hall-large",
   hallName: "巨幕厅",
   hallType: "large",
-  capacity: 310,
+  capacity: 300,
   rowCount: 10,
   screenLabel: "银幕",
-  rows: [
-    { rowLabel: "A", pattern: "XXXXXXXXXSSSSSSSSSSSSSAASSSSSSSSSSSSSSXXXXXXXXX", offsetX: -12, curveDepth: 16 },
-    { rowLabel: "B", pattern: "XXXXXXXXSSSSSSSSSSSSSSAASSSSSSSSSSSSSSSXXXXXXXX", offsetX: -10, curveDepth: 15 },
-    { rowLabel: "C", pattern: "XXXXXXXSSSSSSSSSSSSSSSAASSSSSSSSSSSSSSSSXXXXXXX", offsetX: -8, curveDepth: 14 },
-    { rowLabel: "D", pattern: "XXXXXXSSSSSSSSSSSSSSSSAASSSSSSSSSSSSSSSSSXXXXXX", offsetX: -6, curveDepth: 13 },
-    { rowLabel: "E", pattern: "XXXXXSSSSSSSSSSSSSSSSSAASSSSSSSSSSSSSSSSSSXXXXX", offsetX: -4, curveDepth: 12 },
-    { rowLabel: "F", pattern: "XXXXSSSSSSSSSSSSSSSSSSAASSSSSSSSSSSSSSSSSSSXXXX", offsetX: -2, curveDepth: 11 },
-    { rowLabel: "G", pattern: "XXXXXSSSSSSSSSSSSSSSSSAASSSSSSSSSSSSSSSSSSXXXXX", offsetX: 0, curveDepth: 12 },
-    { rowLabel: "H", pattern: "XXXXXXSSSSSSSSSSSSSSSSAASSSSSSSSSSSSSSSSSXXXXXX", offsetX: 2, curveDepth: 13 },
-    { rowLabel: "I", pattern: "XXXXXXXSSSSSSSSSSSSSSSAASSSSSSSSSSSSSSSSXXXXXXX", offsetX: 4, curveDepth: 14 },
-    { rowLabel: "J", pattern: "XXXXXXXXSSSSSSSSSSSSSWAAWSSSSSSSSSSSSSSXXXXXXXX", offsetX: 6, curveDepth: 15 },
-  ],
+  rows: createTenRowHall(30, 15),
 };
-// 各排 S/W 数量：A=26, B=28, C=30, D=32, E=34, F=36, G=34, H=32, I=30, J=28 → 总计 310
 
 /**
  * 全部影厅数组，方便遍历渲染。
@@ -189,7 +167,7 @@ export const schedulesMock = [
     startTime: "14:00",
     endTime: "16:49",
     price: 68,
-    remainingSeats: 310,
+    remainingSeats: 300,
     status: "on_sale",
   },
   {
@@ -200,7 +178,7 @@ export const schedulesMock = [
     startTime: "19:30",
     endTime: "22:19",
     price: 58,
-    remainingSeats: 210,
+    remainingSeats: 200,
     status: "on_sale",
   },
   {
@@ -211,7 +189,7 @@ export const schedulesMock = [
     startTime: "10:00",
     endTime: "12:49",
     price: 48,
-    remainingSeats: 104,
+    remainingSeats: 100,
     status: "on_sale",
   },
 
@@ -224,7 +202,7 @@ export const schedulesMock = [
     startTime: "14:30",
     endTime: "17:00",
     price: 68,
-    remainingSeats: 310,
+    remainingSeats: 300,
     status: "on_sale",
   },
   {
@@ -235,7 +213,7 @@ export const schedulesMock = [
     startTime: "19:00",
     endTime: "21:30",
     price: 58,
-    remainingSeats: 210,
+    remainingSeats: 200,
     status: "on_sale",
   },
 
@@ -248,7 +226,7 @@ export const schedulesMock = [
     startTime: "10:30",
     endTime: "12:20",
     price: 58,
-    remainingSeats: 210,
+    remainingSeats: 200,
     status: "on_sale",
   },
   {
@@ -259,7 +237,7 @@ export const schedulesMock = [
     startTime: "16:00",
     endTime: "17:50",
     price: 48,
-    remainingSeats: 104,
+    remainingSeats: 100,
     status: "on_sale",
   },
   {
@@ -270,7 +248,7 @@ export const schedulesMock = [
     startTime: "13:00",
     endTime: "14:50",
     price: 68,
-    remainingSeats: 310,
+    remainingSeats: 300,
     status: "on_sale",
   },
 
@@ -283,7 +261,7 @@ export const schedulesMock = [
     startTime: "18:00",
     endTime: "21:00",
     price: 48,
-    remainingSeats: 104,
+    remainingSeats: 100,
     status: "on_sale",
   },
   {
@@ -294,7 +272,7 @@ export const schedulesMock = [
     startTime: "15:00",
     endTime: "18:00",
     price: 58,
-    remainingSeats: 210,
+    remainingSeats: 200,
     status: "on_sale",
   },
 
@@ -307,7 +285,7 @@ export const schedulesMock = [
     startTime: "10:00",
     endTime: "12:20",
     price: 58,
-    remainingSeats: 210,
+    remainingSeats: 200,
     status: "on_sale",
   },
   {
@@ -318,7 +296,7 @@ export const schedulesMock = [
     startTime: "19:00",
     endTime: "21:20",
     price: 68,
-    remainingSeats: 310,
+    remainingSeats: 300,
     status: "on_sale",
   },
 ];
@@ -432,6 +410,26 @@ export const seatStateMock = allSeatStates["s001"] || generateSeatState("s001", 
  * userId 使用 "u" 前缀 + 序号。
  */
 export const usersMock = [
+  {
+    userId: "u000",
+    username: "guest",
+    password: "",
+    role: "user",
+    nickname: "游客",
+    isGuest: true,
+    createdAt: Date.now(),
+    accessibilityMode: {
+      largeText: false,
+      highContrast: false,
+      colorBlindFriendly: false,
+      voicePrompt: false,
+    },
+    preferences: {
+      preferCenter: true,
+      preferBack: false,
+      preferAisle: false,
+    },
+  },
   {
     userId: "u001",
     username: "testuser",

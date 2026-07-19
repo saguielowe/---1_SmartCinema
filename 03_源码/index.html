@@ -13,13 +13,13 @@
           <p class="eyebrow">Web Frontend Final Project</p>
           <h1>SmartCinema</h1>
         </div>
-        <button class="ghost-button" type="button">无障碍模式</button>
+        <button id="accessibility-mode-button" class="ghost-button" type="button" aria-pressed="false">无障碍模式</button>
       </header>
 
       <main class="page-grid">
         <section class="panel form-panel">
           <h2>购票条件</h2>
-          <p class="panel-note">选择场次和人数后，可在座位图中直接点击可用座位。</p>
+          <p class="panel-note">票种、人数和偏好已有默认值；选择场次后会立即推荐并选中座位。</p>
           <form class="ticket-form" onsubmit="return false">
             <label>
               场次
@@ -36,7 +36,7 @@
             </label>
             <label>
               人数
-              <input id="people-count" type="number" min="1" max="8" value="2" aria-label="人数" />
+              <input id="people-count" type="number" min="1" value="1" aria-label="人数" />
             </label>
             <label>
               偏好
@@ -46,7 +46,6 @@
                 <option value="aisle">靠过道优先</option>
               </select>
             </label>
-            <button id="recommend-button" type="button" class="primary-button">显示推荐位置</button>
           </form>
         </section>
 
@@ -54,30 +53,39 @@
           <div class="panel-head">
             <div>
               <h2>影厅选座</h2>
-              <p class="panel-note">桌面点击替换当前座位，Ctrl/Cmd + 点击可多选和拖选；移动端点击可直接增删。已售和锁定座位不可选择。</p>
+              <p class="panel-note">选择场次后载入 B 的推荐占位；可清空后点击选座，Ctrl/Cmd + 点击多选。已售和锁定座位不可选择。</p>
             </div>
             <div class="legend" aria-label="座位状态图例">
               <span><i class="seat-dot available"></i>可选</span>
               <span><i class="seat-dot selected"></i>已选</span>
               <span><i class="seat-dot accessible"></i>无障碍</span>
               <span><i class="seat-dot recommended"></i>推荐</span>
-              <span><i class="seat-dot heat"></i>热度环</span>
+              <span class="heat-legend-item" hidden><i class="seat-dot heat-hot"></i>热门</span>
+              <span class="heat-legend-item" hidden><i class="seat-dot heat-medium"></i>一般</span>
+              <span class="heat-legend-item" hidden><i class="seat-dot heat-cold"></i>冷门</span>
               <span><i class="seat-dot reserved"></i>锁定</span>
               <span><i class="seat-dot sold"></i>已售</span>
             </div>
           </div>
 
+          <div class="heat-toolbar">
+            <button id="heat-toggle" class="heat-toggle" type="button" aria-pressed="false">显示热度</button>
+            <label for="heat-day-select">热度日期</label>
+            <select id="heat-day-select" aria-label="热度日期" disabled>
+              <option value="6">选择场次后查看</option>
+            </select>
+          </div>
           <div class="screen-label">银幕 SCREEN</div>
           <canvas id="seat-canvas" width="960" height="560" tabindex="0" aria-label="影厅座位图"></canvas>
 
           <div class="selection-bar" aria-live="polite">
             <div>
-              <strong id="selection-text">尚未选择座位</strong>
-              <p id="selection-feedback" class="selection-feedback">请选择与人数相同数量的座位。</p>
-              <p id="hover-seat" class="hover-seat">悬停或使用方向键查看座位号</p>
+              <strong id="selection-text">请选择场次</strong>
+              <p id="selection-feedback" class="selection-feedback">选择场次后会自动推荐座位。</p>
+              <p id="hover-seat" class="hover-seat">选择场次后会立即生成热度与推荐座位</p>
             </div>
             <div class="selection-actions">
-              <button id="clear-selection" class="ghost-button" type="button">清空选择</button>
+              <button id="clear-selection" class="ghost-button" type="button">清空重选</button>
               <button id="submit-selection" class="primary-button" type="button" disabled>确认座位</button>
             </div>
           </div>
@@ -86,19 +94,32 @@
         <aside class="panel side-panel">
           <section>
             <h2>推荐结果</h2>
-            <p class="panel-note">A 负责高亮结果；实际推荐规则由 B 模块实现。</p>
+            <p class="panel-note">A 只展示推荐占位和接线，正式推荐策略由 B 模块实现。</p>
             <ul class="result-list" id="recommendation-list"></ul>
           </section>
 
           <section>
             <h2>订单中心</h2>
-            <p class="panel-note">以下数据直接来自 C 模块 Store。</p>
-            <ul class="result-list" id="order-list"></ul>
+            <p class="panel-note">登录后显示当前账号的订单，数据直接来自 C 模块 Store。</p>
+            <div id="order-list" class="order-center"></div>
           </section>
         </aside>
       </main>
     </div>
 
-    <script type="module" src="./js/app.js?v=a-seatmap-3"></script>
+    <dialog id="payment-dialog" class="payment-dialog" aria-labelledby="payment-dialog-title">
+      <div class="payment-dialog-card">
+        <p class="eyebrow">ORDER PAYMENT</p>
+        <h2 id="payment-dialog-title">确认支付</h2>
+        <div id="payment-summary" class="payment-summary"></div>
+        <p class="panel-note">座位已锁定 15 分钟。支付后变为已售，取消订单会立即释放座位。</p>
+        <div class="payment-actions">
+          <button id="cancel-payment" class="ghost-button" type="button">取消订单</button>
+          <button id="confirm-payment" class="primary-button" type="button">确认支付</button>
+        </div>
+      </div>
+    </dialog>
+
+    <script type="module" src="./js/app.js?v=guest-curve-1"></script>
   </body>
 </html>

@@ -12,7 +12,7 @@
  * 内部状态通过 getter 读取，通过专用方法更新，避免模块间直接篡改内部对象。
  */
 
-import { allMockData, generateSeatState, generateHeatMap, generateAllSeatStates, generateAllHeatMaps } from "./mock-data.js?v=a-seatmap-3";
+import { allMockData, generateSeatState, generateHeatMap, generateAllSeatStates, generateAllHeatMaps } from "./mock-data.js?v=guest-1";
 
 // =============================================================================
 // 一、LocalStorage 工具函数（B-1）
@@ -172,6 +172,48 @@ export function createStore(initialState) {
     saveToStorage(STORAGE_KEYS.HEAT_MAP, state.heatMaps);
   }
 
+  /**
+   * 影厅布局升级后，把旧缓存中仍然有效的座位状态迁移到新布局。
+   * 新增座位使用确定性的 mock 状态，已支付/锁定订单覆盖为 sold/reserved。
+   */
+  function reconcileSeatStatesWithCurrentLayouts() {
+    for (const schedule of state.schedules) {
+      const hall = state.halls.find((item) => item.hallId === schedule.hallId);
+      if (!hall) continue;
+
+      const previousBySeatId = new Map(
+        (state.seatStates[schedule.scheduleId] || []).map((seat) => [seat.seatId, seat]),
+      );
+      const freshSeats = generateSeatState(schedule.scheduleId, hall);
+      state.seatStates[schedule.scheduleId] = freshSeats.map((freshSeat) => {
+        const previous = previousBySeatId.get(freshSeat.seatId);
+        return previous ? { ...freshSeat, ...previous, scheduleId: schedule.scheduleId } : freshSeat;
+      });
+    }
+
+    for (const order of state.orders) {
+      const status = order.status === "purchased"
+        ? "sold"
+        : order.status === "booked"
+          ? "reserved"
+          : "";
+      if (!status) continue;
+      const seats = state.seatStates[order.scheduleId] || [];
+      for (const seatId of order.seatIds || []) {
+        const seat = seats.find((item) => item.seatId === seatId);
+        if (seat) {
+          seat.status = status;
+          seat.orderId = order.orderId;
+          seat.userId = order.userId;
+        }
+      }
+    }
+
+    state.heatMaps = generateAllHeatMaps();
+    persistSeatStates();
+    persistHeatMaps();
+  }
+
   // ===========================================================================
   // 四、应用初始化（B-2）
   // ===========================================================================
@@ -208,7 +250,7 @@ export function createStore(initialState) {
       saveToStorage(STORAGE_KEYS.SEAT_STATE, allMockData.seatStates);
       saveToStorage(STORAGE_KEYS.HEAT_MAP, allMockData.heatMaps);
 
-      // 不自动登录，current_user 留空
+      // 当前账号会在加载阶段回退为游客账号。
       removeFromStorage(STORAGE_KEYS.CURRENT_USER);
     }
 
@@ -221,12 +263,19 @@ export function createStore(initialState) {
     state.movies = loadFromStorage(STORAGE_KEYS.MOVIES) || allMockData.movies;
     state.schedules = loadFromStorage(STORAGE_KEYS.SCHEDULES) || allMockData.schedules;
     state.users = loadFromStorage(STORAGE_KEYS.USERS) || allMockData.users;
+    const guestUser = allMockData.users.find((user) => user.isGuest);
+    if (guestUser && !state.users.some((user) => user.userId === guestUser.userId)) {
+      state.users.unshift(guestUser);
+      saveToStorage(STORAGE_KEYS.USERS, state.users);
+    }
     state.orders = loadFromStorage(STORAGE_KEYS.ORDERS) || [];
     state.seatStates = loadFromStorage(STORAGE_KEYS.SEAT_STATE) || {};
     state.heatMaps = loadFromStorage(STORAGE_KEYS.HEAT_MAP) || {};
+    reconcileSeatStatesWithCurrentLayouts();
 
     // 恢复登录会话
-    state.currentUser = loadFromStorage(STORAGE_KEYS.CURRENT_USER) || null;
+    state.currentUser = loadFromStorage(STORAGE_KEYS.CURRENT_USER) || guestUser || null;
+    if (state.currentUser) saveToStorage(STORAGE_KEYS.CURRENT_USER, state.currentUser);
 
     // 恢复锁票超时定时器
     restoreLockTimers();
@@ -796,6 +845,31 @@ export function createStore(initialState) {
      */
     getHeatMapBySchedule(scheduleId) {
       return state.heatMaps[scheduleId] || [];
+    },
+
+    /**
+     * 返回匿名化的座位需求热源。已支付订单权重 1，未支付锁票权重 0.65；
+     * 没有对应订单的 sold/reserved 状态作为历史购票样本补入。
+     */
+    getSeatDemandBySchedule(scheduleId) {
+      const demandBySeatId = new Map();
+      for (const order of state.orders) {
+        if (order.scheduleId !== scheduleId) continue;
+        const weight = order.status === "purchased" ? 1 : order.status === "booked" ? 0.65 : 0;
+        if (!weight) continue;
+        for (const seatId of order.seatIds || []) {
+          demandBySeatId.set(seatId, (demandBySeatId.get(seatId) || 0) + weight);
+        }
+      }
+
+      for (const seat of state.seatStates[scheduleId] || []) {
+        const fallbackWeight = seat.status === "sold" ? 0.42 : seat.status === "reserved" ? 0.26 : 0;
+        if (fallbackWeight && !demandBySeatId.has(seat.seatId)) {
+          demandBySeatId.set(seat.seatId, fallbackWeight);
+        }
+      }
+
+      return [...demandBySeatId].map(([seatId, demandScore]) => ({ seatId, demandScore }));
     },
 
     /**

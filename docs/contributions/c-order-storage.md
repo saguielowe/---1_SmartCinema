@@ -9,16 +9,17 @@
 ## 本次完成
 
 ### Mock 数据层（类别 A，6 项）
-- 三套影厅（星光厅 104 座 / 银幕厅 210 座 / 巨幕厅 310 座，各 10 排）
+- 三套影厅（星光厅 100 座 / 银幕厅 200 座 / 巨幕厅 300 座，均为 10 排）
 - 五部电影（星际穿越 / 流浪地球3 / 哪吒 / 奥本海默 / 蜘蛛侠）
 - 十二个场次（横跨 4 天，覆盖三种影厅规模）
 - 完整座位状态（`generateSeatState` + `generateAllSeatStates` + `allSeatStates`，12 场次共 2602 条）
 - 预设用户（testuser/123456 + admin/admin123）
-- 完整热度数据（`generateHeatMap` + `generateAllHeatMaps` + `allHeatMaps`，12 场次）
+- 提供匿名化订单热源 `getSeatDemandBySchedule`，供前端计算动态扩散热度
 
 ### LocalStorage 持久化层（类别 B，4 项）
 - `loadFromStorage` / `saveToStorage` / `removeFromStorage` 封装
 - `initStore()`：首次运行写入 mock → LS，非首次从 LS 恢复（含登录会话 + 锁票定时器）
+- 未检测到登录会话时自动使用 `guest` 游客账户，方便直接跑通选座、锁票、支付和订单流程；正式登录会覆盖游客会话。
 - 细粒度 `persistUsers` / `persistOrders` / `persistSeatStates` / `persistHeatMaps` 自动同步
 - `clearAllData()` 调试用清除
 
@@ -42,10 +43,10 @@
 - 所有订单操作自动同步 `smartcinema_seat_state`
 
 ### 热度数据（类别 F，5 项）
-- 初始化：中心排 0.6~0.9，边缘排 0.1~0.4
-- 查询：`getHeatMapBySchedule` + `getHeatMapByMovie`
-- 更新：售出 +0.05 / 取消 -0.02，钳位 0~1
-- 按场次独立存储（`schedule.date` 区分不同日期）
+- 已支付订单权重 1，锁票订单权重 0.65；历史 sold/reserved 状态作为补充样本
+- 每个订单座位作为热源，按排距和列距向周围座位衰减扩散
+- 扩散需求占最终热度 58%，中间排/中间列位置权重占 42%
+- 查询仍兼容 `getHeatMapBySchedule` + `getHeatMapByMovie`
 
 ### Store 整合（类别 G，4 项）
 - `createStore()` 内整合全部 5 个子模块

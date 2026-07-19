@@ -30,6 +30,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
   let suppressNextClick = false;
   let animationFrameId = 0;
   let recommendationPulse = 0;
+  let lastRecommendationRenderTime = 0;
 
   function update(nextOptions = {}) {
     options = normalizeOptions({ ...options, ...nextOptions });
@@ -45,7 +46,16 @@ export function createSeatMap(canvas, initialOptions = {}) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     hitAreas = [];
 
-    if (!options.hall) return;
+    if (!options.hall) {
+      ctx.save();
+      ctx.fillStyle = "#667085";
+      ctx.font = "600 24px Segoe UI";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("请先选择场次", canvas.width / 2, canvas.height / 2);
+      ctx.restore();
+      return;
+    }
 
     const rows = options.hall.rows || [];
     const maxPatternLength = Math.max(1, ...rows.map((row) => row.pattern.length));
@@ -127,17 +137,24 @@ export function createSeatMap(canvas, initialOptions = {}) {
   function drawSeat({ x, y, seatId, status, radius, isHighlighted, isFocused, isAccessible, heatScore }) {
     ctx.save();
 
-    drawHeatRings({ x, y, radius, heatScore });
-
-    if (isHighlighted) {
-      drawRecommendationRings({ x, y, radius });
+    if (options.showHeat) {
+      drawHeatBackground({ x, y, radius, heatScore });
     }
 
     ctx.beginPath();
     const isAvailableAccessible = isAccessible && status === "available";
-    ctx.fillStyle = isAvailableAccessible
-      ? "#2563eb"
-      : STATUS_COLORS[status] || STATUS_COLORS.available;
+    const isActiveRecommendation = isHighlighted && (status === "available" || status === "selected");
+    ctx.fillStyle = isActiveRecommendation
+      ? getRecommendationColor()
+      : isAvailableAccessible
+        ? "#2563eb"
+        : STATUS_COLORS[status] || STATUS_COLORS.available;
+    if (isActiveRecommendation) {
+      ctx.shadowColor = recommendationPulse > 0.5
+        ? "rgba(249, 115, 22, 0.72)"
+        : "rgba(34, 197, 94, 0.72)";
+      ctx.shadowBlur = 7 + recommendationPulse * 5;
+    }
     if (isAvailableAccessible) {
       // 无障碍位用方形轮廓与普通圆形座位区分，小尺寸影厅图中也能辨认。
       ctx.roundRect(x - radius - 1, y - radius - 1, radius * 2 + 2, radius * 2 + 2, 2.5);
@@ -188,53 +205,31 @@ export function createSeatMap(canvas, initialOptions = {}) {
     ctx.restore();
   }
 
-  function drawHeatRings({ x, y, radius, heatScore }) {
-    if (heatScore < 0.72) return;
-
-    const normalized = Math.max(0, Math.min(1, (heatScore - 0.72) / 0.18));
+  function drawHeatBackground({ x, y, radius, heatScore }) {
+    const palette = heatScore >= 0.68
+      ? { core: "239, 68, 68", edge: "254, 202, 202" }
+      : heatScore >= 0.38
+        ? { core: "245, 158, 11", edge: "253, 230, 138" }
+        : { core: "59, 130, 246", edge: "191, 219, 254" };
+    // 热度是座位状态下方的连续色块：保留绿/黄/红座位本体，同时让蓝/黄/红区域足够醒目。
+    const intensity = 0.42 + Math.max(0, Math.min(1, heatScore)) * 0.28;
+    const fieldRadius = radius + 11;
+    const gradient = ctx.createRadialGradient(x, y, radius * 0.45, x, y, fieldRadius);
+    gradient.addColorStop(0, `rgba(${palette.core}, ${intensity})`);
+    gradient.addColorStop(0.62, `rgba(${palette.edge}, ${intensity * 0.78})`);
+    gradient.addColorStop(1, `rgba(${palette.edge}, 0.06)`);
     ctx.beginPath();
-    ctx.strokeStyle = `rgba(124, 58, 237, ${0.18 + normalized * 0.32})`;
-    ctx.lineWidth = 1 + normalized * 1.2;
-    ctx.arc(x, y, radius + 2.5, 0, Math.PI * 2);
-    ctx.stroke();
-
-    if (heatScore >= 0.82) {
-      ctx.beginPath();
-      ctx.strokeStyle = `rgba(124, 58, 237, ${0.2 + normalized * 0.4})`;
-      ctx.lineWidth = 1.2 + normalized * 1.4;
-      ctx.arc(x, y, radius + 5.5, 0, Math.PI * 2);
-      ctx.stroke();
-    }
+    ctx.fillStyle = gradient;
+    ctx.arc(x, y, fieldRadius, 0, Math.PI * 2);
+    ctx.fill();
   }
 
-  function drawRecommendationRings({ x, y, radius }) {
-    const pulseRadius = radius + 7 + recommendationPulse * 2.5;
-    const gradient = ctx.createLinearGradient(x - pulseRadius, y, x + pulseRadius, y);
-    gradient.addColorStop(0, "#22c55e");
-    gradient.addColorStop(0.52, "#facc15");
-    gradient.addColorStop(1, "#f97316");
-
-    ctx.save();
-    ctx.shadowColor = `rgba(249, 115, 22, ${0.35 + recommendationPulse * 0.35})`;
-    ctx.shadowBlur = 5 + recommendationPulse * 7;
-    ctx.strokeStyle = gradient;
-    ctx.lineWidth = 2.5 + recommendationPulse * 1.8;
-    ctx.beginPath();
-    ctx.arc(x, y, pulseRadius, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.globalAlpha = 0.55 + recommendationPulse * 0.35;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(x, y, pulseRadius + 5, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-
-    ctx.fillStyle = recommendationPulse > 0.45 ? "#f97316" : "#16a34a";
-    ctx.font = "700 11px Segoe UI Symbol";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("★", x, y - pulseRadius - 7);
+  function getRecommendationColor() {
+    const green = [34, 197, 94];
+    const orange = [249, 115, 22];
+    const mix = recommendationPulse;
+    const channel = (index) => Math.round(green[index] + (orange[index] - green[index]) * mix);
+    return `rgb(${channel(0)}, ${channel(1)}, ${channel(2)})`;
   }
 
   function syncRecommendationAnimation() {
@@ -252,7 +247,10 @@ export function createSeatMap(canvas, initialOptions = {}) {
 
   function animateRecommendation(timestamp) {
     recommendationPulse = (Math.sin(timestamp / 360) + 1) / 2;
-    render();
+    if (timestamp - lastRecommendationRenderTime >= 80) {
+      lastRecommendationRenderTime = timestamp;
+      render();
+    }
     animationFrameId = window.requestAnimationFrame(animateRecommendation);
   }
 
@@ -500,6 +498,7 @@ function normalizeOptions(options) {
     hall: options.hall || null,
     seatState: options.seatState || [],
     heatMap: options.heatMap || [],
+    showHeat: Boolean(options.showHeat),
     highlightedSeatIds: options.highlightedSeatIds || [],
     maxSelected: Math.max(1, Number(options.maxSelected) || 1),
     onSelectionChange: options.onSelectionChange || (() => {}),
@@ -512,7 +511,8 @@ function getCurveOffset(cellIndex, length, curveDepth) {
   const center = (length - 1) / 2;
   const distance = Math.abs(cellIndex - center);
   const ratio = distance / Math.max(center, 1);
-  return Math.pow(ratio, 1.65) * curveDepth * 1.65;
+  // 二次曲线让中心区域较平、两端逐渐下沉；避免低次幂形成左右两条近似斜线。
+  return ratio * ratio * curveDepth * 1.9;
 }
 
 function statusLabel(status) {
