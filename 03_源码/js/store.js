@@ -12,7 +12,7 @@
  * 内部状态通过 getter 读取，通过专用方法更新，避免模块间直接篡改内部对象。
  */
 
-import { allMockData, generateSeatState, generateHeatMap, generateAllSeatStates, generateAllHeatMaps } from "./mock-data.js";
+import { allMockData, generateSeatState, generateHeatMap, generateAllSeatStates, generateAllHeatMaps } from "./mock-data.js?v=a-seatmap-3";
 
 // =============================================================================
 // 一、LocalStorage 工具函数（B-1）

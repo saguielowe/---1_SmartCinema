@@ -28,6 +28,8 @@ export function createSeatMap(canvas, initialOptions = {}) {
   let activeSelectedSeatId = "";
   let dragState = null;
   let suppressNextClick = false;
+  let animationFrameId = 0;
+  let recommendationPulse = 0;
 
   function update(nextOptions = {}) {
     options = normalizeOptions({ ...options, ...nextOptions });
@@ -36,6 +38,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
     }
     removeUnavailableSelections();
     render();
+    syncRecommendationAnimation();
   }
 
   function render() {
@@ -53,6 +56,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
     const rowSpacing = Math.min(43, (canvas.height - TOP_OFFSET - 38) / Math.max(rows.length, 1));
     const seatRadius = Math.max(4.5, Math.min(9, cellSize * 0.34));
     const stateBySeatId = new Map(options.seatState.map((seat) => [seat.seatId, seat]));
+    const heatBySeatId = new Map(options.heatMap.map((item) => [item.seatId, item.heatScore]));
 
     rows.forEach((row, rowIndex) => {
       drawRow({
@@ -62,11 +66,12 @@ export function createSeatMap(canvas, initialOptions = {}) {
         rowSpacing,
         seatRadius,
         stateBySeatId,
+        heatBySeatId,
       });
     });
   }
 
-  function drawRow({ row, rowIndex, cellSize, rowSpacing, seatRadius, stateBySeatId }) {
+  function drawRow({ row, rowIndex, cellSize, rowSpacing, seatRadius, stateBySeatId, heatBySeatId }) {
     const rowWidth = row.pattern.length * cellSize;
     const startX = canvas.width / 2 - rowWidth / 2 + (row.offsetX || 0);
     const baseY = TOP_OFFSET + rowIndex * rowSpacing;
@@ -82,6 +87,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
       const x = startX + cellIndex * cellSize + cellSize / 2;
       const y = baseY + getCurveOffset(cellIndex, row.pattern.length, row.curveDepth || 0);
       const storedStatus = stateBySeatId.get(seatId)?.status || "available";
+      const heatScore = heatBySeatId.get(seatId) ?? 0;
       const status = selectedSeatIds.has(seatId) && storedStatus === "available"
         ? "selected"
         : storedStatus;
@@ -95,6 +101,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
         isHighlighted: options.highlightedSeatIds.includes(seatId),
         isFocused: focusedSeatId === seatId,
         isAccessible: cellType === "W",
+        heatScore,
       });
 
       hitAreas.push({
@@ -104,6 +111,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
         seatId,
         status: storedStatus,
         seatType: cellType,
+        heatScore,
       });
     }
 
@@ -116,35 +124,44 @@ export function createSeatMap(canvas, initialOptions = {}) {
     ctx.restore();
   }
 
-  function drawSeat({ x, y, seatId, status, radius, isHighlighted, isFocused, isAccessible }) {
+  function drawSeat({ x, y, seatId, status, radius, isHighlighted, isFocused, isAccessible, heatScore }) {
     ctx.save();
 
+    drawHeatRings({ x, y, radius, heatScore });
+
     if (isHighlighted) {
-      ctx.beginPath();
-      ctx.fillStyle = "rgba(13, 148, 136, 0.2)";
-      ctx.arc(x, y, radius + 6, 0, Math.PI * 2);
-      ctx.fill();
+      drawRecommendationRings({ x, y, radius });
     }
 
     ctx.beginPath();
-    ctx.fillStyle = STATUS_COLORS[status] || STATUS_COLORS.available;
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    const isAvailableAccessible = isAccessible && status === "available";
+    ctx.fillStyle = isAvailableAccessible
+      ? "#2563eb"
+      : STATUS_COLORS[status] || STATUS_COLORS.available;
+    if (isAvailableAccessible) {
+      // 无障碍位用方形轮廓与普通圆形座位区分，小尺寸影厅图中也能辨认。
+      ctx.roundRect(x - radius - 1, y - radius - 1, radius * 2 + 2, radius * 2 + 2, 2.5);
+    } else {
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+    }
     ctx.fill();
 
     if (isAccessible) {
       ctx.beginPath();
       ctx.strokeStyle = "#2563eb";
-      ctx.lineWidth = 2;
-      ctx.arc(x, y, radius + 3, 0, Math.PI * 2);
+      ctx.lineWidth = 2.5;
+      if (isAvailableAccessible) {
+        ctx.roundRect(x - radius - 3, y - radius - 3, radius * 2 + 6, radius * 2 + 6, 3.5);
+      } else {
+        ctx.arc(x, y, radius + 3, 0, Math.PI * 2);
+      }
       ctx.stroke();
 
-      if (radius >= 6) {
-        ctx.fillStyle = "#ffffff";
-        ctx.font = `700 ${Math.max(7, radius)}px Segoe UI`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("W", x, y + 0.5);
-      }
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `800 ${Math.max(8, radius * 1.25)}px Segoe UI`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("W", x, y + 0.5);
     }
 
     if (status === "selected") {
@@ -171,6 +188,74 @@ export function createSeatMap(canvas, initialOptions = {}) {
     ctx.restore();
   }
 
+  function drawHeatRings({ x, y, radius, heatScore }) {
+    if (heatScore < 0.72) return;
+
+    const normalized = Math.max(0, Math.min(1, (heatScore - 0.72) / 0.18));
+    ctx.beginPath();
+    ctx.strokeStyle = `rgba(124, 58, 237, ${0.18 + normalized * 0.32})`;
+    ctx.lineWidth = 1 + normalized * 1.2;
+    ctx.arc(x, y, radius + 2.5, 0, Math.PI * 2);
+    ctx.stroke();
+
+    if (heatScore >= 0.82) {
+      ctx.beginPath();
+      ctx.strokeStyle = `rgba(124, 58, 237, ${0.2 + normalized * 0.4})`;
+      ctx.lineWidth = 1.2 + normalized * 1.4;
+      ctx.arc(x, y, radius + 5.5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  function drawRecommendationRings({ x, y, radius }) {
+    const pulseRadius = radius + 7 + recommendationPulse * 2.5;
+    const gradient = ctx.createLinearGradient(x - pulseRadius, y, x + pulseRadius, y);
+    gradient.addColorStop(0, "#22c55e");
+    gradient.addColorStop(0.52, "#facc15");
+    gradient.addColorStop(1, "#f97316");
+
+    ctx.save();
+    ctx.shadowColor = `rgba(249, 115, 22, ${0.35 + recommendationPulse * 0.35})`;
+    ctx.shadowBlur = 5 + recommendationPulse * 7;
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = 2.5 + recommendationPulse * 1.8;
+    ctx.beginPath();
+    ctx.arc(x, y, pulseRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.globalAlpha = 0.55 + recommendationPulse * 0.35;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(x, y, pulseRadius + 5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.fillStyle = recommendationPulse > 0.45 ? "#f97316" : "#16a34a";
+    ctx.font = "700 11px Segoe UI Symbol";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("★", x, y - pulseRadius - 7);
+  }
+
+  function syncRecommendationAnimation() {
+    const shouldAnimate = options.highlightedSeatIds.length > 0;
+    if (!shouldAnimate && animationFrameId) {
+      window.cancelAnimationFrame(animationFrameId);
+      animationFrameId = 0;
+      recommendationPulse = 0;
+      return;
+    }
+    if (shouldAnimate && !animationFrameId) {
+      animationFrameId = window.requestAnimationFrame(animateRecommendation);
+    }
+  }
+
+  function animateRecommendation(timestamp) {
+    recommendationPulse = (Math.sin(timestamp / 360) + 1) / 2;
+    render();
+    animationFrameId = window.requestAnimationFrame(animateRecommendation);
+  }
+
   function onCanvasClick(event) {
     if (suppressNextClick) {
       suppressNextClick = false;
@@ -194,7 +279,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
     if (["ArrowRight", "ArrowDown"].includes(event.key)) {
       event.preventDefault();
       focusedSeatId = availableSeats[(index + 1) % availableSeats.length].seatId;
-      options.onSeatFocus({ seatId: focusedSeatId, status: "available" });
+      options.onSeatFocus(availableSeats[(index + 1) % availableSeats.length]);
       updateCanvasAccessibilityLabel();
       render();
       return;
@@ -203,7 +288,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
     if (["ArrowLeft", "ArrowUp"].includes(event.key)) {
       event.preventDefault();
       focusedSeatId = availableSeats[(index - 1 + availableSeats.length) % availableSeats.length].seatId;
-      options.onSeatFocus({ seatId: focusedSeatId, status: "available" });
+      options.onSeatFocus(availableSeats[(index - 1 + availableSeats.length) % availableSeats.length]);
       updateCanvasAccessibilityLabel();
       render();
       return;
@@ -237,7 +322,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
       activeSelectedSeatId = seatId;
     }
 
-    options.onSeatFocus({ seatId, status: "available" });
+    options.onSeatFocus(hitAreas.find((area) => area.seatId === seatId) || { seatId, status: "available" });
     updateCanvasAccessibilityLabel();
     render();
     emitSelectionChange();
@@ -303,7 +388,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
     }
     canvas.style.cursor = hit?.status === "available" ? "pointer" : "not-allowed";
     canvas.title = hit ? `${hit.seatId}（${statusLabel(hit.status)}）` : "";
-    options.onSeatFocus(hit ? { seatId: hit.seatId, status: hit.status } : null);
+    options.onSeatFocus(hit || null);
   }
 
   function findHitArea(x, y) {
@@ -383,6 +468,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
   });
 
   render();
+  syncRecommendationAnimation();
   updateCanvasAccessibilityLabel();
 
   return {
@@ -399,6 +485,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
       canvas.removeEventListener("pointercancel", endPointerDrag);
       canvas.removeEventListener("pointermove", onCanvasMove);
       canvas.removeEventListener("keydown", onCanvasKeyDown);
+      if (animationFrameId) window.cancelAnimationFrame(animationFrameId);
     },
   };
 }
@@ -412,6 +499,7 @@ function normalizeOptions(options) {
   return {
     hall: options.hall || null,
     seatState: options.seatState || [],
+    heatMap: options.heatMap || [],
     highlightedSeatIds: options.highlightedSeatIds || [],
     maxSelected: Math.max(1, Number(options.maxSelected) || 1),
     onSelectionChange: options.onSelectionChange || (() => {}),

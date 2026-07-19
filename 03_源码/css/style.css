@@ -204,8 +204,31 @@ h2 {
 }
 
 .seat-dot.accessible {
-  background: var(--success);
-  border: 2px solid #2563eb;
+  background: #2563eb;
+  border: 1px solid #1d4ed8;
+}
+
+.seat-dot.recommended {
+  background: linear-gradient(135deg, #22c55e, #f97316);
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.28);
+  animation: recommendation-pulse 1.2s ease-in-out infinite alternate;
+}
+
+.seat-dot.heat {
+  background: transparent;
+  border: 1px solid rgba(124, 58, 237, 0.75);
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.28);
+}
+
+@keyframes recommendation-pulse {
+  from {
+    transform: scale(0.88);
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.25);
+  }
+  to {
+    transform: scale(1.16);
+    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.42);
+  }
 }
 
 .seat-dot.reserved {

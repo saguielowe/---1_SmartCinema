@@ -1,5 +1,5 @@
-import { store } from "./store.js";
-import { createSeatMap } from "./seat-map.js";
+import { store } from "./store.js?v=a-seatmap-3";
+import { createSeatMap } from "./seat-map.js?v=a-seatmap-3";
 import { getDefaultRecommendation } from "./recommendation.js";
 
 store.initStore();
@@ -20,6 +20,7 @@ const orderList = document.querySelector("#order-list");
 const schedules = store.getSchedules();
 let currentScheduleId = schedules[0]?.scheduleId || "s001";
 let recommendation = getDefaultRecommendation();
+let activeRecommendationSeatIds = [];
 
 populateSchedules();
 
@@ -36,6 +37,7 @@ const seatMap = createSeatMap(seatCanvas, {
 renderRecommendation();
 renderSelection([]);
 renderOrders();
+renderFocusedSeat(null);
 
 scheduleSelect?.addEventListener("change", () => {
   currentScheduleId = scheduleSelect.value;
@@ -43,14 +45,18 @@ scheduleSelect?.addEventListener("change", () => {
   seatMap.resetFocus();
   seatMap.update({ ...getSeatMapData(), maxSelected: getPeopleCount() });
   renderSelection([]);
+  renderRecommendation();
   renderOrders();
+  renderFocusedSeat(null);
   setFeedback("已切换场次，请重新选择座位。", "info");
 });
 
 peopleCountInput?.addEventListener("change", () => {
   const count = getPeopleCount();
   peopleCountInput.value = String(count);
-  seatMap.update({ maxSelected: count });
+  activeRecommendationSeatIds = getAvailableRecommendationIds();
+  seatMap.update({ maxSelected: count, highlightedSeatIds: activeRecommendationSeatIds });
+  renderRecommendation();
 
   const selected = seatMap.getSelectedSeatIds();
   if (selected.length > count) {
@@ -62,9 +68,10 @@ peopleCountInput?.addEventListener("change", () => {
 
 recommendationButton?.addEventListener("click", () => {
   recommendation = getDefaultRecommendation();
-  seatMap.update({ highlightedSeatIds: getAvailableRecommendationIds() });
+  activeRecommendationSeatIds = getAvailableRecommendationIds();
+  seatMap.update({ highlightedSeatIds: activeRecommendationSeatIds });
   renderRecommendation();
-  setFeedback("推荐座位已用青色光圈标出；推荐逻辑由 B 模块继续完善。", "info");
+  setFeedback("推荐座位已用绿橙渐变呼吸环标出；推荐逻辑由 B 模块继续完善。", "info");
 });
 
 clearSelectionButton?.addEventListener("click", () => {
@@ -102,18 +109,55 @@ function getSeatMapData() {
   const schedule = store.getScheduleById(currentScheduleId);
   const hall = schedule ? store.getHallById(schedule.hallId) : null;
   const seatState = store.getSeatStateBySchedule(currentScheduleId);
+  const heatMap = store.getHeatMapBySchedule(currentScheduleId);
+  activeRecommendationSeatIds = getAvailableRecommendationIds(seatState, heatMap);
   return {
     hall,
     seatState,
-    highlightedSeatIds: getAvailableRecommendationIds(seatState),
+    heatMap,
+    highlightedSeatIds: activeRecommendationSeatIds,
   };
 }
 
-function getAvailableRecommendationIds(seatState = store.getSeatStateBySchedule(currentScheduleId)) {
+function getAvailableRecommendationIds(
+  seatState = store.getSeatStateBySchedule(currentScheduleId),
+  heatMap = store.getHeatMapBySchedule(currentScheduleId),
+) {
+  const count = getPeopleCount();
   const available = new Set(
     seatState.filter((seat) => seat.status === "available").map((seat) => seat.seatId),
   );
-  return recommendation.recommendedSeatIds.filter((seatId) => available.has(seatId));
+
+  for (const preferredIds of [recommendation.recommendedSeatIds, recommendation.fallbackSeatIds]) {
+    if (preferredIds.length >= count && preferredIds.slice(0, count).every((seatId) => available.has(seatId))) {
+      return preferredIds.slice(0, count);
+    }
+  }
+
+  const heatBySeatId = new Map(heatMap.map((item) => [item.seatId, item.heatScore]));
+  const rows = new Map();
+  for (const seat of seatState) {
+    if (seat.status !== "available") continue;
+    const [rowLabel, seatNumberText] = seat.seatId.split("-");
+    if (!rows.has(rowLabel)) rows.set(rowLabel, []);
+    rows.get(rowLabel).push({ seatId: seat.seatId, seatNumber: Number(seatNumberText) });
+  }
+
+  let best = null;
+  for (const seats of rows.values()) {
+    seats.sort((a, b) => a.seatNumber - b.seatNumber);
+    for (let index = 0; index <= seats.length - count; index += 1) {
+      const candidate = seats.slice(index, index + count);
+      const isContinuous = candidate.every((seat, offset) => (
+        offset === 0 || seat.seatNumber === candidate[offset - 1].seatNumber + 1
+      ));
+      if (!isContinuous) continue;
+      const score = candidate.reduce((sum, seat) => sum + (heatBySeatId.get(seat.seatId) || 0), 0);
+      if (!best || score > best.score) best = { score, seatIds: candidate.map((seat) => seat.seatId) };
+    }
+  }
+
+  return best?.seatIds || [];
 }
 
 function getPeopleCount() {
@@ -154,15 +198,34 @@ function setFeedback(message, type) {
 function renderFocusedSeat(seat) {
   if (!hoverSeatText) return;
   const label = { available: "可选", reserved: "已锁定", sold: "已售" }[seat?.status];
+  const accessibility = seat?.seatType === "W" ? " · 无障碍座位" : "";
+  const heat = Number.isFinite(seat?.heatScore) ? ` · 热度 ${seat.heatScore.toFixed(2)}` : "";
   hoverSeatText.textContent = seat
-    ? `当前座位：${seat.seatId}（${label || seat.status}）`
-    : "悬停或使用方向键查看座位号";
+    ? `当前座位：${seat.seatId}（${label || seat.status}）${accessibility}${heat}`
+    : `无障碍座位：${getAccessibleSeatIds().join("、") || "本厅暂无"}；悬停或使用方向键查看详情`;
+}
+
+function getAccessibleSeatIds() {
+  const schedule = store.getScheduleById(currentScheduleId);
+  const hall = schedule ? store.getHallById(schedule.hallId) : null;
+  const seatIds = [];
+
+  for (const row of hall?.rows || []) {
+    let seatNumber = 0;
+    for (const cellType of row.pattern) {
+      if (cellType !== "S" && cellType !== "W") continue;
+      seatNumber += 1;
+      if (cellType === "W") seatIds.push(`${row.rowLabel}-${seatNumber}`);
+    }
+  }
+  return seatIds;
 }
 
 function renderRecommendation() {
   if (!recommendationList) return;
   recommendationList.innerHTML = `
-    <li>推荐座位：${recommendation.recommendedSeatIds.join("、")}</li>
+    <li>当前高亮：${activeRecommendationSeatIds.join("、") || "暂无可用连座"}</li>
+    <li>规则初选：${recommendation.recommendedSeatIds.join("、")}</li>
     <li>备选座位：${recommendation.fallbackSeatIds.join("、")}</li>
     <li>推荐理由：${recommendation.reasons.join("；")}</li>
   `;
