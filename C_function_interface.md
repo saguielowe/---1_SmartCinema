@@ -93,23 +93,23 @@ const result = runRecommendation(recommendationInput, hall, seatState);
 ### 1.1 影厅数据（导出常量）
 
 #### `hallSmall` → `{object}`
-小厅「星光厅」完整影厅对象，约 104 座。
+小厅「星光厅」完整影厅对象，严格为 100 座（10 排 × 10 座）。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | hallId | string | `"hall-small"` |
 | hallName | string | `"星光厅"` |
 | hallType | string | `"small"` |
-| capacity | number | `104` |
+| capacity | number | `100` |
 | rowCount | number | `10` |
 | screenLabel | string | `"银幕"` |
 | rows | array | 10 个 row 对象，含 rowLabel / pattern / offsetX / curveDepth |
 
 #### `hallMedium` → `{object}`
-中厅「银幕厅」完整影厅对象，约 210 座。结构同上，hallId=`"hall-medium"`。
+中厅「银幕厅」完整影厅对象，严格为 200 座（10 排 × 20 座）。结构同上，hallId=`"hall-medium"`。
 
 #### `hallLarge` → `{object}`
-大厅「巨幕厅」完整影厅对象，约 310 座。结构同上，hallId=`"hall-large"`。
+大厅「巨幕厅」完整影厅对象，严格为 300 座（10 排 × 30 座）。结构同上，hallId=`"hall-large"`。
 
 #### `hallsMock` → `{Array<object>}`
 全部三套影厅的数组：`[hallSmall, hallMedium, hallLarge]`。
@@ -187,21 +187,22 @@ generateAllSeatStates(): Object<string, Array<seatState>>
 **数据量统计：**
 | 场次 | 影厅 | 座位数 | 预置 sold 数（约 15%）|
 |------|------|--------|----------------------|
-| s001, s004, s008, s012 | hall-large | 310 | ~47 |
-| s002, s005, s006, s010, s011 | hall-medium | 210 | ~32 |
-| s003, s007, s009 | hall-small | 104 | ~16 |
+| s001, s004, s008, s012 | hall-large | 300 | ~45 |
+| s002, s005, s006, s010, s011 | hall-medium | 200 | ~30 |
+| s003, s007, s009 | hall-small | 100 | ~15 |
 
 #### `seatStateMock` → `{Array<object>}`
-向后兼容引用：`allSeatStates["s001"]`，对应 s001 场次（星际穿越·巨幕厅，310 座）。供 `app.js` 初始加载使用。
+向后兼容引用：`allSeatStates["s001"]`，对应 s001 场次（星际穿越·巨幕厅，300 座）。供 `app.js` 初始加载使用。
 
 ---
 
 ### 1.5 用户数据（导出常量）
 
 #### `usersMock` → `{Array<object>}`
-2 个预设用户：
+3 个预设账号；`guest` 仅用于无会话时自动进入演示流程：
 | username | password | role | userId |
 |----------|----------|------|--------|
+| guest | 空（不用于手动登录） | user | u000 |
 | testuser | 123456 | user | u001 |
 | admin | admin123 | admin | u002 |
 
@@ -265,7 +266,7 @@ generateAllHeatMaps(): Object<string, Array<heatMapData>>
   halls,         // hallsMock（3 套影厅）
   movies,        // moviesMock（5 部电影）
   schedules,     // schedulesMock（12 个场次）
-  users,         // usersMock（2 个预设用户）
+  users,         // usersMock（游客 + 普通用户 + 管理员）
   orders,        // ordersMock（3 条示例订单）
   seatStates,    // allSeatStates — 完整 12 场次座位状态
   heatMaps,      // allHeatMaps — 完整 12 场次热度数据
@@ -304,7 +305,7 @@ generateAllHeatMaps(): Object<string, Array<heatMapData>>
 | `loadFromStorage(key)` | `(key: string) → any\|null` | 读取并 JSON.parse，失败返回 null |
 | `saveToStorage(key, data)` | `(key: string, data: any) → void` | JSON.stringify 写入，失败仅 warn |
 | `removeFromStorage(key)` | `(key: string) → void` | 删除指定 key |
-| `initStore()` | `() → { isFirstRun: boolean }` | **（暴露）** 启动初始化：检查 smartcinema_users → 不存在则写入 allMockData → 加载全部到内存 → 恢复登录会话 → 恢复锁票定时器 |
+| `initStore()` | `() → { isFirstRun: boolean }` | **（暴露）** 启动初始化：检查 smartcinema_users → 不存在则写入 allMockData → 加载数据 → 恢复正式会话或回退游客账号 → 恢复锁票定时器 |
 | `clearAllData()` | `() → void` | **（暴露）** 清除全部 LS 数据 + 重置内存状态 + 清理所有定时器 |
 | `persistAll()` | 内部 | 全量持久化（HALLS/MOVIES/SCHEDULES/USERS/ORDERS/SEAT_STATE/HEAT_MAP/CURRENT_USER） |
 | `persistUsers()` | 内部 | 仅持久化 USERS + CURRENT_USER |
@@ -343,7 +344,7 @@ generateAllHeatMaps(): Object<string, Array<heatMapData>>
 | `register(username, password)` | `{ success, message, user? }` | 注册（校验唯一 + 非空），成功自动登录 |
 | `login(username, password)` | `{ success, message, user? }` | 登录校验，写入 current_user |
 | `logout()` | `void` | 登出，清除 current_user |
-| `getCurrentUser()` | `user\|null` | 当前登录用户 |
+| `getCurrentUser()` | `user\|null` | 当前账号；无正式会话时初始化为游客 |
 | `isLoggedIn()` | `boolean` | 是否已登录 |
 | `isAdmin()` | `boolean` | 是否管理员 |
 

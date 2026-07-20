@@ -2,8 +2,8 @@
 
 ## 当前进度
 
-- ✅ 已完成全部底层开发（A~G 类别，34/38 项任务）
-- 分支：`feature/order-storage`（基于 `main`，8 commits）
+- ✅ C 的公共数据、Store、订单、锁票、热度和持久化接口已完成，并已与 A 主流程联通。
+- 原开发分支：`feature/order-storage`；当前集成基线为 `dev@93399d5`。
 - 负责人：C
 
 ## 本次完成
@@ -12,8 +12,8 @@
 - 三套影厅（星光厅 100 座 / 银幕厅 200 座 / 巨幕厅 300 座，均为 10 排）
 - 五部电影（星际穿越 / 流浪地球3 / 哪吒 / 奥本海默 / 蜘蛛侠）
 - 十二个场次（横跨 4 天，覆盖三种影厅规模）
-- 完整座位状态（`generateSeatState` + `generateAllSeatStates` + `allSeatStates`，12 场次共 2602 条）
-- 预设用户（testuser/123456 + admin/admin123）
+- 完整座位状态（`generateSeatState` + `generateAllSeatStates` + `allSeatStates`，12 场次共 2500 条）
+- 预设游客、普通用户和管理员（guest + testuser/123456 + admin/admin123）
 - 提供匿名化订单热源 `getSeatDemandBySchedule`，供前端计算动态扩散热度
 
 ### LocalStorage 持久化层（类别 B，4 项）
@@ -62,8 +62,8 @@
 | `03_源码/js/store.js` | 从 21 行占位→860 行完整 Store（B/C/D/E/F 全部接口 + LS 持久化 + 锁票定时器） |
 | `03_源码/js/app.js` | 重构为新的 store 单例调用，接入 initStore + renderOrders + A 接线 |
 | `03_源码/test-store.html` | 新建 visual cargo test 面板（4 区域 + 综合日志 + Full Flow 自动化） |
-| `functions.md` | 364 行功能函数文档（mock-data.js 全部导出 + store.js 全部接口 + 对接速查 §〇） |
-| `draft.md` | 进度标注 A~G 全部 [x] |
+| `C_function_interface.md` | mock-data.js 导出、store.js 公共接口与对接速查 |
+| `C_draft.md` | 历史开发规划（已归档说明，不作为当前状态依据） |
 | `docs/contributions/c-order-storage.md` | 本文档 |
 
 ## 手动测试
@@ -71,7 +71,7 @@
 1. 启动 Python HTTP 服务器：`cd 03_源码 && python -m http.server 8080`
 2. 打开 `http://localhost:8080/test-store.html`
 3. 测试流程：
-   - 点击 **initStore()** → 验证 5 movies / 12 schedules / 3 halls / 2602 seats
+   - 点击 **initStore()** → 验证 5 movies / 12 schedules / 3 halls / 2500 seats
    - 点击 **Check LS Data** → 验证 8 个 smartcinema_* key
    - Login（testuser/123456）→ SUCCESS
    - 选 s001，座 E-5,E-6 → Create Order → 验证 orderId / totalPrice / expires

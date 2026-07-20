@@ -18,6 +18,7 @@
   password: "123456",
   role: "user", // user | admin
   nickname: "abc",
+  isGuest: false, // 游客账号为 true，正式账号可省略
   createdAt: 1780000000000,
   accessibilityMode: {
     largeText: false,
@@ -36,6 +37,7 @@
 说明：
 
 - 当前注册建议先简化为 `username + password`
+- 无正式会话时 Store 使用 `u000 / guest` 游客账号跑演示流程；正式登录会覆盖游客会话
 - `nickname` 可选，没有时间可以不做
 - 不必为了这次作业单独做邮箱验证
 

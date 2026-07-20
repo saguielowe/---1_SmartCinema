@@ -1,5 +1,7 @@
 # C 模块：账号与订单 —— 准备工作与工作分类整理
 
+> **历史文档（已归档）**：本文记录 C 模块开发前的评估和任务拆解，其中“Store 仅为占位”“单厅约 80 座”等描述已经过期。当前实现与接口请以 `03_源码/js/store.js`、`03_源码/js/mock-data.js`、`C_function_interface.md` 和 `docs/contributions/c-order-storage.md` 为准；不要按本文重新开发或回退结构。
+
 > 对应任务：`注册登录、LocalStorage、订单、锁票、热度数据`
 > 工作文件：`03_源码/js/store.js`（主文件）
 > 对接方：A（选座）、B（推荐）、D（页面整合）
