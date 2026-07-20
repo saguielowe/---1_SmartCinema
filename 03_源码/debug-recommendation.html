@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SmartCinema 推荐调试</title>
+    <style>
+      body {
+        margin: 24px;
+        color: #111827;
+        font-family: Consolas, "Microsoft YaHei", monospace;
+      }
+
+      textarea,
+      input,
+      select,
+      button {
+        font: inherit;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 360px 1fr;
+        gap: 16px;
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+
+      textarea,
+      input,
+      select {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px;
+      }
+
+      button {
+        margin: 0 6px 8px 0;
+        padding: 7px 10px;
+      }
+
+      pre {
+        min-height: 620px;
+        margin: 0;
+        padding: 14px;
+        overflow: auto;
+        background: #f3f4f6;
+        border: 1px solid #d1d5db;
+        white-space: pre-wrap;
+      }
+
+      @media (max-width: 900px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>SmartCinema 推荐调试</h1>
+    <p>用于人眼检查 B 推荐模块与 C Store 接口对齐情况。打开 Console 后也可使用 <code>window.__recommendationDebug</code>。</p>
+
+    <div class="grid">
+      <section>
+        <label>
+          场次 scheduleId
+          <input id="schedule-id" value="s001" />
+        </label>
+
+        <label>
+          票种
+          <select id="ticket-type">
+            <option value="single">single 个人票</option>
+            <option value="couple" selected>couple 情侣票</option>
+            <option value="family">family 家庭票</option>
+            <option value="group">group 团体票</option>
+          </select>
+        </label>
+
+        <label>
+          人数
+          <input id="people-count" type="number" min="1" max="20" value="2" />
+        </label>
+
+        <label>
+          成员：每行一个，格式为“姓名,年龄”
+          <textarea id="passengers" rows="8">张三,21
+李四,22</textarea>
+        </label>
+
+        <label>
+          偏好
+          <select id="preference">
+            <option value="center" selected>中区</option>
+            <option value="back">中后排</option>
+            <option value="aisle">靠过道</option>
+          </select>
+        </label>
+
+        <label>
+          <span><input id="accessibility" type="checkbox" /> 需要无障碍座位</span>
+        </label>
+
+        <button id="run" type="button">运行推荐</button>
+        <button data-case="couple" type="button">情侣成人</button>
+        <button data-case="familyTeen" type="button">家庭含少年</button>
+        <button data-case="groupSenior" type="button">团体含老人</button>
+        <button data-case="groupTooSmall" type="button">团体人数不足</button>
+      </section>
+
+      <pre id="output">点击“运行推荐”查看文本报告。</pre>
+    </div>
+
+    <script type="module">
+      import { store } from "./js/store.js?v=guest-1";
+      import { debugRecommendation } from "./js/recommendation.js?v=guest-1";
+
+      store.initStore();
+
+      const scheduleIdInput = document.querySelector("#schedule-id");
+      const ticketTypeSelect = document.querySelector("#ticket-type");
+      const peopleCountInput = document.querySelector("#people-count");
+      const passengersInput = document.querySelector("#passengers");
+      const preferenceSelect = document.querySelector("#preference");
+      const accessibilityInput = document.querySelector("#accessibility");
+      const output = document.querySelector("#output");
+
+      const cases = {
+        couple: {
+          ticketType: "couple",
+          peopleCount: 2,
+          passengers: "张三,21\n李四,22",
+          preference: "center",
+        },
+        familyTeen: {
+          ticketType: "family",
+          peopleCount: 3,
+          passengers: "爸爸,40\n妈妈,38\n孩子,12",
+          preference: "back",
+        },
+        groupSenior: {
+          ticketType: "group",
+          peopleCount: 6,
+          passengers: "老人,65\n成员2,30\n成员3,31\n成员4,32\n成员5,33\n成员6,34",
+          preference: "back",
+        },
+        groupTooSmall: {
+          ticketType: "group",
+          peopleCount: 3,
+          passengers: "成员1,20\n成员2,21\n成员3,22",
+          preference: "center",
+        },
+      };
+
+      document.querySelector("#run").addEventListener("click", run);
+
+      document.querySelectorAll("[data-case]").forEach((button) => {
+        button.addEventListener("click", () => {
+          fillCase(cases[button.dataset.case]);
+          run();
+        });
+      });
+
+      function run() {
+        const scheduleId = scheduleIdInput.value.trim() || "s001";
+        const schedule = store.getScheduleById(scheduleId);
+        const hall = schedule ? store.getHallById(schedule.hallId) : store.getHalls()[0];
+        const seatState = schedule ? store.getSeatStateBySchedule(schedule.scheduleId) : [];
+        const report = debugRecommendation(readInput(schedule), { hall, seatState, schedule });
+
+        output.textContent = `${report.text}\n\nRaw Result JSON\n----------------\n${JSON.stringify(
+          report.result,
+          null,
+          2,
+        )}\n\nCandidate JSON\n----------------\n${JSON.stringify(report.candidates, null, 2)}`;
+      }
+
+      function readInput(schedule) {
+        const preference = preferenceSelect.value;
+
+        return {
+          ticketType: ticketTypeSelect.value,
+          peopleCount: Number(peopleCountInput.value),
+          selectedScheduleId: schedule?.scheduleId,
+          selectedMovieId: schedule?.movieId,
+          passengers: parsePassengers(passengersInput.value),
+          needAccessibility: accessibilityInput.checked,
+          preferences: {
+            preferCenter: preference === "center",
+            preferBack: preference === "back",
+            preferAisle: preference === "aisle",
+            accessibilityNeeded: accessibilityInput.checked,
+          },
+        };
+      }
+
+      function fillCase(caseData) {
+        ticketTypeSelect.value = caseData.ticketType;
+        peopleCountInput.value = caseData.peopleCount;
+        passengersInput.value = caseData.passengers;
+        preferenceSelect.value = caseData.preference;
+        accessibilityInput.checked = false;
+      }
+
+      function parsePassengers(rawText) {
+        return rawText
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line, index) => {
+            const [namePart, agePart] = line.split(/[,，\s]+/);
+
+            return {
+              name: namePart || `成员${index + 1}`,
+              age: Number(agePart),
+            };
+          })
+          .filter((passenger) => Number.isFinite(passenger.age));
+      }
+
+      window.__recommendationDebug = {
+        store,
+        debugRecommendation,
+        run,
+      };
+
+      run();
+    </script>
+  </body>
+</html>

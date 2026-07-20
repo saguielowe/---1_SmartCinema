@@ -29,7 +29,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -123,13 +124,36 @@ h2 {
 }
 
 .ticket-form input,
-.ticket-form select {
+.ticket-form select,
+.ticket-form textarea {
   width: 100%;
   border: 1px solid rgba(15, 23, 42, 0.12);
   border-radius: 14px;
   padding: 12px 14px;
   background: rgba(255, 255, 255, 0.88);
   color: var(--text);
+}
+
+.ticket-form textarea {
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.checkbox-line {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  color: var(--text);
+}
+
+.checkbox-line input {
+  width: 18px;
+  height: 18px;
+}
+
+.debug-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .primary-button,
@@ -392,6 +416,17 @@ button:disabled {
   padding-left: 20px;
   color: var(--muted);
   line-height: 1.6;
+}
+
+.debug-output {
+  margin: 14px 0 0;
+  padding: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.04);
+  color: var(--text);
+  white-space: pre-wrap;
+  line-height: 1.5;
 }
 
 .order-center {

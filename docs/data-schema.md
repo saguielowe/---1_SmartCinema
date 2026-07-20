@@ -174,11 +174,21 @@
   recommendedSeatIds: ["F-8", "F-9"],
   fallbackSeatIds: ["G-8", "G-9"],
   score: "excellent", // excellent | good | normal
+  scoreLabel: "极佳", // 极佳 | 优秀 | 一般
+  scoreValue: 85,
   reasons: ["中后排视角更舒适", "座位连续且靠近中心区域"],
   recommendedArea: "middle-back",
-  warnings: []
+  warnings: [],
+  scoreDetails: {
+    angle: 0.92,
+    distance: 0.9,
+    spacing: 0.86,
+    preference: 0.9
+  }
 }
 ```
+
+评分与调试说明见 [B 模块接口说明](./recommendation-api.md)。
 
 ## 订单 `order`
 

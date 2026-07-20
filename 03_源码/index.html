@@ -39,6 +39,10 @@
               <input id="people-count" type="number" min="1" value="1" aria-label="人数" />
             </label>
             <label>
+              成员姓名与年龄
+              <textarea id="passengers-input" rows="5" aria-label="成员姓名与年龄" placeholder="张三,21&#10;李四,22">张三,21</textarea>
+            </label>
+            <label>
               偏好
               <select id="preference" aria-label="偏好">
                 <option value="center">中间区域优先</option>
@@ -46,6 +50,16 @@
                 <option value="aisle">靠过道优先</option>
               </select>
             </label>
+            <label class="checkbox-line">
+              <input id="need-accessibility" type="checkbox" />
+              需要无障碍座位
+            </label>
+            <div class="debug-buttons">
+              <button id="apply-recommendation" class="primary-button" type="button">生成推荐</button>
+              <button class="ghost-button" type="button" data-demo="couple">情侣示例</button>
+              <button class="ghost-button" type="button" data-demo="family">家庭示例</button>
+              <button class="ghost-button" type="button" data-demo="group">团体示例</button>
+            </div>
           </form>
         </section>
 
@@ -94,8 +108,9 @@
         <aside class="panel side-panel">
           <section>
             <h2>推荐结果</h2>
-            <p class="panel-note">A 只展示推荐占位和接线，正式推荐策略由 B 模块实现。</p>
+            <p class="panel-note">B 模块根据票种、成员年龄、连座规则和体验评分输出可解释推荐。</p>
             <ul class="result-list" id="recommendation-list"></ul>
+            <pre class="debug-output" id="recommendation-debug">选择场次后生成推荐报告。</pre>
           </section>
 
           <section>

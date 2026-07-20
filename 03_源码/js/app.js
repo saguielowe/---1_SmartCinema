@@ -1,3 +1,4 @@
+import { debugRecommendation } from "./recommendation.js?v=guest-1";
 import { store } from "./store.js?v=guest-1";
 import { createSeatMap } from "./seat-map.js?v=curve-2";
 
@@ -8,11 +9,15 @@ const scheduleSelect = document.querySelector("#schedule-select");
 const peopleCountInput = document.querySelector("#people-count");
 const ticketTypeSelect = document.querySelector("#ticket-type");
 const preferenceSelect = document.querySelector("#preference");
+const passengersInput = document.querySelector("#passengers-input");
+const needAccessibilityInput = document.querySelector("#need-accessibility");
+const applyRecommendationButton = document.querySelector("#apply-recommendation");
 const heatDaySelect = document.querySelector("#heat-day-select");
 const heatToggleButton = document.querySelector("#heat-toggle");
 const heatLegendItems = document.querySelectorAll(".heat-legend-item");
 const accessibilityModeButton = document.querySelector("#accessibility-mode-button");
 const recommendationList = document.querySelector("#recommendation-list");
+const recommendationDebug = document.querySelector("#recommendation-debug");
 const selectionText = document.querySelector("#selection-text");
 const selectionFeedback = document.querySelector("#selection-feedback");
 const hoverSeatText = document.querySelector("#hover-seat");
@@ -28,6 +33,7 @@ const schedules = store.getSchedules();
 let currentScheduleId = "";
 let activeRecommendationSeatIds = [];
 let currentHeatMap = [];
+let currentRecommendationReport = null;
 let isApplyingAutomaticSelection = false;
 let isAccessibilityMode = false;
 let isManualSelection = false;
@@ -65,6 +71,21 @@ scheduleSelect?.addEventListener("change", () => {
 peopleCountInput?.addEventListener("change", handlePeopleCountChange);
 ticketTypeSelect?.addEventListener("change", handleTicketTypeChange);
 preferenceSelect?.addEventListener("change", refreshFromConditions);
+passengersInput?.addEventListener("input", refreshFromConditions);
+needAccessibilityInput?.addEventListener("change", refreshFromConditions);
+applyRecommendationButton?.addEventListener("click", () => {
+  if (!currentScheduleId) {
+    setFeedback("请先选择场次，再生成推荐。", "warning");
+    return;
+  }
+  applyAutomaticRecommendation({ message: "已根据当前填写的观影条件重新生成推荐。" });
+});
+document.querySelectorAll("[data-demo]").forEach((button) => {
+  button.addEventListener("click", () => {
+    fillDemoCase(button.dataset.demo);
+    refreshFromConditions();
+  });
+});
 accessibilityModeButton?.addEventListener("click", toggleAccessibilityMode);
 heatDaySelect?.addEventListener("change", refreshHeatForSelectedDay);
 heatToggleButton?.addEventListener("click", toggleHeatVisibility);
@@ -147,7 +168,7 @@ function handleTicketTypeChange() {
     single: 1,
     couple: 2,
     family: 3,
-    group: 4,
+    group: 5,
   }[ticketTypeSelect?.value] || 1;
   peopleCountInput.value = String(defaultPeopleCount);
   refreshFromConditions();
@@ -224,7 +245,7 @@ function refreshHeatForSelectedDay() {
   setFeedback(`已切换到 ${heatDaySelect.selectedOptions[0]?.textContent || "所选日期"} 的热度分布。`, "info");
 }
 
-function applyAutomaticRecommendation({ anchorSeatId = "", message = "" } = {}) {
+function applyAutomaticRecommendation({ message = "" } = {}) {
   const schedule = store.getScheduleById(currentScheduleId);
   const hall = schedule ? store.getHallById(schedule.hallId) : null;
   const seatState = currentScheduleId ? store.getSeatStateBySchedule(currentScheduleId) : [];
@@ -232,6 +253,7 @@ function applyAutomaticRecommendation({ anchorSeatId = "", message = "" } = {}) 
   if (!hall) {
     activeRecommendationSeatIds = [];
     currentHeatMap = [];
+    currentRecommendationReport = null;
     seatMap.update({ hall: null, seatState: [], heatMap: [], highlightedSeatIds: [], selectedSeatIds: [] });
     renderSelection([]);
     renderRecommendation();
@@ -241,13 +263,12 @@ function applyAutomaticRecommendation({ anchorSeatId = "", message = "" } = {}) 
 
   const seatMeta = buildSeatMetadata(hall);
   currentHeatMap = calculateDemandHeatMap(hall, seatState, seatMeta);
-  activeRecommendationSeatIds = findBestSeatGroup({
+  currentRecommendationReport = debugRecommendation(buildRecommendationInput(schedule), {
     hall,
     seatState,
-    heatMap: currentHeatMap,
-    seatMeta,
-    anchorSeatId,
+    schedule,
   });
+  activeRecommendationSeatIds = currentRecommendationReport.result.recommendedSeatIds;
   isManualSelection = false;
 
   isApplyingAutomaticSelection = true;
@@ -267,7 +288,7 @@ function applyAutomaticRecommendation({ anchorSeatId = "", message = "" } = {}) 
   renderFocusedSeat(null);
   dispatchSelectionChange(activeRecommendationSeatIds);
   setFeedback(
-    message || `已围绕 ${anchorSeatId} 重新推荐相邻座位，可直接确认。`,
+    message || "已根据 B 模块的规则推荐相邻座位，可直接确认。",
     activeRecommendationSeatIds.length === getPeopleCount() ? "success" : "warning",
   );
 }
@@ -482,7 +503,7 @@ function renderSelection(selectedSeatIds) {
     ? pendingPaymentOrder
       ? `已锁定座位：${pendingPaymentOrder.seatIds.join("、")}`
       : selectedSeatIds.length
-        ? `${isManualSelection ? "已选座位" : "B 推荐占位"}：${selectedSeatIds.join("、")}`
+        ? `${isManualSelection ? "已选座位" : "B 推荐座位"}：${selectedSeatIds.join("、")}`
         : "尚未选择座位"
     : "请选择场次";
   if (submitSelectionButton) {
@@ -518,25 +539,105 @@ function getAccessibleSeatIds() {
     .map((seat) => seat.seatId);
 }
 
+function buildRecommendationInput(schedule) {
+  const preference = preferenceSelect?.value || "center";
+
+  return {
+    ticketType: ticketTypeSelect?.value || "single",
+    peopleCount: getPeopleCount(),
+    selectedMovieId: schedule?.movieId,
+    selectedScheduleId: schedule?.scheduleId,
+    needAccessibility: Boolean(needAccessibilityInput?.checked),
+    passengers: parsePassengers(passengersInput?.value || ""),
+    preferences: {
+      preferCenter: preference === "center",
+      preferBack: preference === "back",
+      preferAisle: preference === "aisle",
+      accessibilityNeeded: Boolean(needAccessibilityInput?.checked),
+    },
+  };
+}
+
+function parsePassengers(rawText) {
+  return rawText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line, index) => {
+      const [namePart, agePart] = line.split(/[,，\s]+/);
+
+      return {
+        name: namePart || `成员${index + 1}`,
+        age: Number(agePart),
+      };
+    })
+    .filter((passenger) => Number.isFinite(passenger.age));
+}
+
+function fillDemoCase(type) {
+  const cases = {
+    couple: {
+      ticketType: "couple",
+      peopleCount: 2,
+      passengers: "张三,21\n李四,22",
+      preference: "center",
+    },
+    family: {
+      ticketType: "family",
+      peopleCount: 3,
+      passengers: "爸爸,40\n妈妈,38\n孩子,12",
+      preference: "back",
+    },
+    group: {
+      ticketType: "group",
+      peopleCount: 6,
+      passengers: "老人,65\n成员2,30\n成员3,31\n成员4,32\n成员5,33\n成员6,34",
+      preference: "back",
+    },
+  };
+  const demo = cases[type];
+
+  if (!demo || !ticketTypeSelect || !peopleCountInput || !passengersInput || !preferenceSelect) {
+    return;
+  }
+
+  ticketTypeSelect.value = demo.ticketType;
+  peopleCountInput.value = String(demo.peopleCount);
+  passengersInput.value = demo.passengers;
+  preferenceSelect.value = demo.preference;
+  if (needAccessibilityInput) needAccessibilityInput.checked = false;
+}
+
 function renderRecommendation() {
   if (!recommendationList) return;
   if (!currentScheduleId) {
-    recommendationList.innerHTML = "<li>选择场次后载入 B 模块推荐占位结果。</li>";
+    recommendationList.innerHTML = "<li>选择场次后载入 B 模块推荐结果。</li>";
+    if (recommendationDebug) recommendationDebug.textContent = "选择场次后生成推荐报告。";
     return;
   }
-  const preferenceLabel = {
-    center: "中间区域优先",
-    back: "后排优先",
-    aisle: "靠过道优先",
-  }[preferenceSelect?.value] || "中间区域优先";
+
+  if (!currentRecommendationReport) {
+    recommendationList.innerHTML = "<li>暂无推荐结果，请点击“生成推荐”。</li>";
+    if (recommendationDebug) recommendationDebug.textContent = "暂无推荐报告。";
+    return;
+  }
+
+  const result = currentRecommendationReport.result;
+  const warnings = result.warnings?.length
+    ? `<li>规则提醒：${result.warnings.join("；")}</li>`
+    : "";
   recommendationList.innerHTML = `
-    <li>B 推荐占位：${activeRecommendationSeatIds.join("、") || "已进入手动选座"}</li>
-    <li>购票条件：${getPeopleCount()} 人 · ${ticketTypeSelect?.selectedOptions?.[0]?.textContent || "个人票"}</li>
-    <li>推荐偏好：${preferenceLabel}</li>
-    <li>热度日期：${heatDaySelect?.selectedOptions?.[0]?.textContent || "本场放映日"}</li>
-    <li>正式推荐算法、打分和理由由 B 模块替换</li>
-    <li>用户可清空占位结果，通过点击或 Ctrl/Cmd + 点击自行选座</li>
+    <li>推荐座位：${result.recommendedSeatIds.join("、") || "暂无"}</li>
+    <li>备选座位：${result.fallbackSeatIds.join("、") || "暂无"}</li>
+    <li>体验评分：${result.scoreLabel}（${result.scoreValue}/100）</li>
+    <li>推荐区域：${result.recommendedArea || "暂无"}</li>
+    <li>推荐理由：${result.reasons.join("；")}</li>
+    ${warnings}
+    <li>用户仍可清空结果，通过点击或 Ctrl/Cmd + 点击自行选座。</li>
   `;
+  if (recommendationDebug) {
+    recommendationDebug.textContent = currentRecommendationReport.text;
+  }
 }
 
 function redrawCurrentScheduleAfterOrder() {
