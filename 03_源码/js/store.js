@@ -517,6 +517,7 @@ export function createStore(initialState) {
         nickname: username.trim(),
         createdAt: Date.now(),
         accessibilityMode: {
+          enabled: false,
           largeText: false,
           highContrast: false,
           colorBlindFriendly: false,
@@ -570,6 +571,27 @@ export function createStore(initialState) {
 
     /** 获取当前登录用户（无登录返回 null） */
     getCurrentUser() { return state.currentUser; },
+
+    /** 保存当前账号是否启用无障碍购票模式，并同步到下次登录使用的用户记录。 */
+    setAccessibilityModeEnabled(enabled) {
+      if (!state.currentUser) {
+        return { success: false, message: "当前未登录" };
+      }
+      const normalizedEnabled = Boolean(enabled);
+      state.currentUser.accessibilityMode = {
+        ...(state.currentUser.accessibilityMode || {}),
+        enabled: normalizedEnabled,
+      };
+      const storedUser = state.users.find((user) => user.userId === state.currentUser.userId);
+      if (storedUser) {
+        storedUser.accessibilityMode = {
+          ...(storedUser.accessibilityMode || {}),
+          enabled: normalizedEnabled,
+        };
+      }
+      persistUsers();
+      return { success: true, enabled: normalizedEnabled };
+    },
 
     /** 是否已登录 */
     isLoggedIn() { return state.currentUser !== null; },

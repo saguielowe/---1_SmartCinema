@@ -56,6 +56,44 @@ textarea {
   margin-bottom: 20px;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 7px 10px;
+  border-radius: 15px;
+  background: linear-gradient(135deg, rgba(13, 148, 136, 0.12), rgba(255, 255, 255, 0.72));
+}
+
+.user-summary > div {
+  display: grid;
+  min-width: 0;
+}
+
+.user-summary span:not(.user-avatar) {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.user-avatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 800;
+}
+
 .eyebrow {
   margin: 0 0 8px;
   color: var(--accent);
@@ -150,10 +188,23 @@ h2 {
   height: 18px;
 }
 
-.debug-buttons {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+.checkbox-group {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.checkbox-group-title {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.recommendation-action {
+  width: 100%;
+  justify-content: center;
 }
 
 .primary-button,
@@ -306,12 +357,29 @@ h2 {
 
 .heat-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
   margin: 10px 0;
   color: var(--muted);
   font-size: 0.86rem;
+}
+
+.heat-toolbar .heat-toggle {
+  margin-left: auto;
+}
+
+.heat-toolbar .inventory-summary {
+  align-items: center;
+}
+
+.heat-toolbar .inventory-summary strong {
+  width: auto;
+}
+
+.heat-toolbar .inventory-summary[hidden] {
+  display: none;
 }
 
 .heat-toggle {
@@ -388,9 +456,11 @@ button:disabled {
 }
 
 .hover-seat {
+  min-height: 1.2em;
   margin-top: 4px;
   color: var(--accent);
   font-size: 0.82rem;
+  line-height: 1.2;
 }
 
 .selection-feedback[data-type="success"] {
@@ -418,53 +488,15 @@ button:disabled {
   line-height: 1.6;
 }
 
-.debug-output {
-  margin: 14px 0 0;
-  padding: 12px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 14px;
-  background: rgba(15, 23, 42, 0.04);
-  color: var(--text);
-  white-space: pre-wrap;
-  line-height: 1.5;
-}
-
 .order-center {
   display: grid;
   gap: 12px;
   margin-top: 14px;
 }
 
-.order-account {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px;
-  border-radius: 15px;
-  background: linear-gradient(135deg, rgba(13, 148, 136, 0.12), rgba(255, 255, 255, 0.72));
-}
-
-.order-account > div {
-  display: grid;
-  min-width: 0;
-}
-
-.order-account span:not(.order-avatar),
 .order-owner {
   color: var(--muted);
   font-size: 0.75rem;
-}
-
-.order-avatar {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #ffffff;
-  font-weight: 800;
 }
 
 .inventory-summary {
@@ -631,6 +663,10 @@ button:disabled {
   .selection-bar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .topbar-actions {
+    justify-content: space-between;
   }
 
   .selection-actions > button {

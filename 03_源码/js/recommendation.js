@@ -46,7 +46,13 @@ export function recommendSeats(recommendationInput = {}, hallOrOptions, maybeSea
     ...recommendationInput,
   });
   const seats = buildSeatIndex(hall);
-  const candidates = findCandidates({ seats, hall, seatState, input });
+  let candidates = findCandidates({ seats, hall, seatState, input });
+
+  // 团体票首先保证同排连座；当中央走道或已售座位把一排切开时，
+  // 再退化为相邻的多个连续座位区，避免人数稍多就直接没有推荐结果。
+  if (candidates.length === 0 && input.ticketType === "group") {
+    candidates = findSplitGroupCandidates({ seats, hall, seatState, input });
+  }
 
   if (candidates.length === 0) {
     return buildEmptyResult(input, hall);
@@ -164,11 +170,6 @@ function normalizeInput(input) {
   }
 
   if (ticketType === "group") {
-    if (peopleCount < 5) {
-      warnings.push("团体票要求 5 到 20 人，已按 5 人搜索。");
-      peopleCount = 5;
-    }
-
     if (peopleCount > 20) {
       warnings.push("团体票最多支持 20 人，已按 20 人搜索。");
       peopleCount = 20;
@@ -308,6 +309,127 @@ function findContinuousBlocks(rowSeats, peopleCount, seatState, input) {
   return blocks;
 }
 
+function findSplitGroupCandidates({ seats, hall, seatState, input }) {
+  const rowCount = hall.rows.length;
+  const components = groupSeatsByRow(seats)
+    .filter((rowSeats) => rowIsAllowed(rowSeats[0].rowIndex, rowCount, input))
+    .flatMap((rowSeats) => getAvailableComponents(rowSeats, seatState, input));
+
+  if (components.length === 0) return [];
+
+  const candidates = [];
+  const targetRow = getTargetRowRatio(input) * Math.max(rowCount - 1, 1);
+
+  // 以每一个允许排为中心尝试组合；优先同排、靠中间的分区，必要时才扩展到邻排。
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+    if (!rowIsAllowed(rowIndex, rowCount, input)) continue;
+
+    const selected = selectSplitGroupSeats({
+      components,
+      peopleCount: input.peopleCount,
+      needAccessibility: input.needAccessibility,
+      targetRow: rowIndex,
+    });
+
+    if (selected.length !== input.peopleCount) continue;
+    if (input.needAccessibility && !selected.some((seat) => seat.isAccessibility)) continue;
+
+    const componentCount = countSeatComponents(selected);
+    if (componentCount < 2) continue;
+
+    const candidate = scoreSeatBlock({ block: selected, allSeats: seats, seatState, input, hall });
+    candidate.isSplitGroup = true;
+    candidate.componentCount = componentCount;
+    candidate.targetRowDistance = Math.abs(rowIndex - targetRow);
+    candidates.push(candidate);
+  }
+
+  return candidates
+    .sort((a, b) => b.scoreValue - a.scoreValue || a.targetRowDistance - b.targetRowDistance);
+}
+
+function getAvailableComponents(rowSeats, seatState, input) {
+  const components = [];
+  let component = [];
+
+  rowSeats.forEach((seat) => {
+    const previous = component[component.length - 1];
+    const continues = previous && seat.cellIndex === previous.cellIndex + 1;
+    const available = isSeatAvailable(seat.seatId, seatState, input.selectedScheduleId);
+
+    if (!available || !continues && component.length > 0) {
+      if (component.length > 0) components.push(component);
+      component = [];
+    }
+
+    if (available) component.push(seat);
+  });
+
+  if (component.length > 0) components.push(component);
+  return components;
+}
+
+function selectSplitGroupSeats({ components, peopleCount, needAccessibility, targetRow }) {
+  const rankedComponents = [...components].sort((left, right) => (
+    getComponentPriority(left, targetRow) - getComponentPriority(right, targetRow)
+  ));
+  const selected = [];
+  let remaining = peopleCount;
+
+  if (needAccessibility) {
+    const accessible = rankedComponents.find((component) => component.some((seat) => seat.isAccessibility));
+    if (!accessible) return [];
+    const picked = takeComponentSeats(accessible, Math.min(remaining, accessible.length), true);
+    selected.push(...picked);
+    remaining -= picked.length;
+  }
+
+  for (const component of rankedComponents) {
+    if (remaining === 0) break;
+    if (selected.some((seat) => component.includes(seat))) continue;
+    const picked = takeComponentSeats(component, Math.min(remaining, component.length), false);
+    selected.push(...picked);
+    remaining -= picked.length;
+  }
+
+  return selected;
+}
+
+function getComponentPriority(component, targetRow) {
+  const rowDistance = Math.abs(component[0].rowIndex - targetRow);
+  const center = component.reduce((sum, seat) => sum + (seat.cellIndex + 0.5) / seat.rowLength, 0) / component.length;
+  return rowDistance * 4 + Math.abs(center - 0.5) * 2;
+}
+
+function takeComponentSeats(component, count, requireAccessibility) {
+  if (count >= component.length) return [...component];
+
+  let best = component.slice(0, count);
+  let bestPriority = Number.POSITIVE_INFINITY;
+
+  for (let start = 0; start <= component.length - count; start += 1) {
+    const slice = component.slice(start, start + count);
+    if (requireAccessibility && !slice.some((seat) => seat.isAccessibility)) continue;
+    const center = slice.reduce((sum, seat) => sum + (seat.cellIndex + 0.5) / seat.rowLength, 0) / slice.length;
+    const priority = Math.abs(center - 0.5);
+    if (priority < bestPriority) {
+      best = slice;
+      bestPriority = priority;
+    }
+  }
+
+  return best;
+}
+
+function countSeatComponents(seats) {
+  const sorted = [...seats].sort((left, right) => left.rowIndex - right.rowIndex || left.cellIndex - right.cellIndex);
+  return sorted.reduce((count, seat, index) => {
+    if (index === 0) return 1;
+    const previous = sorted[index - 1];
+    return count + (seat.rowIndex !== previous.rowIndex || seat.cellIndex !== previous.cellIndex + 1 ? 1 : 0);
+  }, 0);
+}
+
 function scoreSeatBlock({ block, allSeats, seatState, input, hall }) {
   const rowCount = hall.rows.length;
   const rowRatio =
@@ -404,12 +526,20 @@ function calculatePreferenceScore(block, input, centerRatio, rowRatio) {
 function buildResult({ best, fallback, input }) {
   const warnings = [...input.warnings];
 
+  if (best.isSplitGroup) {
+    warnings.push(`未找到 ${input.peopleCount} 个同排连续空座，已拆分为 ${best.componentCount} 个相邻座位区。`);
+  }
+
   if (input.hasTeen) {
     warnings.push("含 15 岁以下少年，推荐已避开前三排。");
   }
 
   if (input.hasSenior) {
-    warnings.push("含 60 岁以上老年人，推荐已避开最后三排。");
+    warnings.push(
+      input.needAccessibility
+        ? "含 60 岁以上老年人；无障碍需求优先，必要时会放宽最后三排限制。"
+        : "含 60 岁以上老年人，推荐已避开最后三排。",
+    );
   }
 
   return {
@@ -427,13 +557,19 @@ function buildResult({ best, fallback, input }) {
 
 function buildReasons(candidate, input) {
   const reasons = [
-    `${input.ticketTypeLabel}已匹配 ${input.peopleCount} 个同排连续空座。`,
+    candidate.isSplitGroup
+      ? `${input.ticketTypeLabel}已在 ${candidate.componentCount} 个相邻座位区匹配 ${input.peopleCount} 个空座。`
+      : `${input.ticketTypeLabel}已匹配 ${input.peopleCount} 个同排连续空座。`,
   ];
 
   if (candidate.scoreDetails.angle >= 0.8) {
     reasons.push("座位靠近影厅中轴线，水平视角更自然。");
   } else {
-    reasons.push("当前可用连座满足人数要求，但横向视角略偏。");
+    reasons.push(
+      candidate.isSplitGroup
+        ? "当前可用座位区满足人数要求，但横向视角略偏。"
+        : "当前可用连座满足人数要求，但横向视角略偏。",
+    );
   }
 
   if (candidate.scoreDetails.distance >= 0.8) {
@@ -567,6 +703,9 @@ function formatPreferences(preferences) {
 }
 
 function rowIsAllowed(rowIndex, rowCount, input) {
+  // 无障碍需求属于硬约束，优先于年龄带来的排数建议。
+  // 实际候选仍必须包含 W 座位，不会因此推荐普通座位。
+  if (input.needAccessibility) return true;
   if (input.hasTeen && rowIndex < 3) return false;
   if (input.hasSenior && rowIndex >= rowCount - 3) return false;
   return true;

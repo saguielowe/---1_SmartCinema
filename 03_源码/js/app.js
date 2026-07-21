@@ -9,15 +9,17 @@ const scheduleSelect = document.querySelector("#schedule-select");
 const peopleCountInput = document.querySelector("#people-count");
 const ticketTypeSelect = document.querySelector("#ticket-type");
 const preferenceSelect = document.querySelector("#preference");
-const passengersInput = document.querySelector("#passengers-input");
+const hasTeenInput = document.querySelector("#has-teen");
+const hasSeniorInput = document.querySelector("#has-senior");
 const needAccessibilityInput = document.querySelector("#need-accessibility");
 const applyRecommendationButton = document.querySelector("#apply-recommendation");
 const heatDaySelect = document.querySelector("#heat-day-select");
 const heatToggleButton = document.querySelector("#heat-toggle");
+const currentInventory = document.querySelector("#current-inventory");
 const heatLegendItems = document.querySelectorAll(".heat-legend-item");
 const accessibilityModeButton = document.querySelector("#accessibility-mode-button");
+const userSummary = document.querySelector("#user-summary");
 const recommendationList = document.querySelector("#recommendation-list");
-const recommendationDebug = document.querySelector("#recommendation-debug");
 const selectionText = document.querySelector("#selection-text");
 const selectionFeedback = document.querySelector("#selection-feedback");
 const hoverSeatText = document.querySelector("#hover-seat");
@@ -26,7 +28,7 @@ const submitSelectionButton = document.querySelector("#submit-selection");
 const orderList = document.querySelector("#order-list");
 const paymentDialog = document.querySelector("#payment-dialog");
 const paymentSummary = document.querySelector("#payment-summary");
-const cancelPaymentButton = document.querySelector("#cancel-payment");
+const deferPaymentButton = document.querySelector("#defer-payment");
 const confirmPaymentButton = document.querySelector("#confirm-payment");
 
 const schedules = store.getSchedules();
@@ -35,12 +37,13 @@ let activeRecommendationSeatIds = [];
 let currentHeatMap = [];
 let currentRecommendationReport = null;
 let isApplyingAutomaticSelection = false;
-let isAccessibilityMode = false;
+let isAccessibilityMode = Boolean(store.getCurrentUser()?.accessibilityMode?.enabled);
 let isManualSelection = false;
 let pendingPaymentOrder = null;
 let isHeatVisible = false;
 
 populateSchedules();
+applyAccessibilityModeState();
 
 const seatMap = createSeatMap(seatCanvas, {
   hall: null,
@@ -58,6 +61,7 @@ const seatMap = createSeatMap(seatCanvas, {
 
 renderSelection([]);
 renderRecommendation();
+renderUserSummary();
 renderOrders();
 renderFocusedSeat(null);
 
@@ -68,23 +72,18 @@ scheduleSelect?.addEventListener("change", () => {
   applyAutomaticRecommendation({ message: "已根据场次和购票条件自动选好座位，可直接确认。" });
 });
 
-peopleCountInput?.addEventListener("change", handlePeopleCountChange);
+peopleCountInput?.addEventListener("input", handlePeopleCountChange);
 ticketTypeSelect?.addEventListener("change", handleTicketTypeChange);
 preferenceSelect?.addEventListener("change", refreshFromConditions);
-passengersInput?.addEventListener("input", refreshFromConditions);
+hasTeenInput?.addEventListener("change", refreshFromConditions);
+hasSeniorInput?.addEventListener("change", refreshFromConditions);
 needAccessibilityInput?.addEventListener("change", refreshFromConditions);
 applyRecommendationButton?.addEventListener("click", () => {
   if (!currentScheduleId) {
-    setFeedback("请先选择场次，再生成推荐。", "warning");
+    setFeedback("请先选择场次，再生成推荐座位。", "warning");
     return;
   }
-  applyAutomaticRecommendation({ message: "已根据当前填写的观影条件重新生成推荐。" });
-});
-document.querySelectorAll("[data-demo]").forEach((button) => {
-  button.addEventListener("click", () => {
-    fillDemoCase(button.dataset.demo);
-    refreshFromConditions();
-  });
+  applyAutomaticRecommendation({ message: "已根据当前购票条件重新生成推荐座位。" });
 });
 accessibilityModeButton?.addEventListener("click", toggleAccessibilityMode);
 heatDaySelect?.addEventListener("change", refreshHeatForSelectedDay);
@@ -95,7 +94,7 @@ clearSelectionButton?.addEventListener("click", () => {
   seatMap.update({ highlightedSeatIds: [] });
   seatMap.clearSelection();
   renderSelection([]);
-  setFeedback("推荐占位已清空；现在可用点击或 Ctrl/Cmd + 点击自行多选。", "info");
+  setFeedback("推荐座位已清空；现在可用点击或 Ctrl/Cmd + 点击自行多选。", "info");
 });
 
 submitSelectionButton?.addEventListener("click", () => {
@@ -134,23 +133,29 @@ confirmPaymentButton?.addEventListener("click", () => {
   const paidOrderId = pendingPaymentOrder.orderId;
   pendingPaymentOrder = null;
   paymentDialog?.close();
-  applyAutomaticRecommendation({ message: `订单 ${paidOrderId} 支付成功，座位已更新为已售。` });
+  applyAutomaticRecommendation({
+    message: `订单 ${paidOrderId} 支付成功，座位已更新为已售。请前往右侧订单中心查看。`,
+  });
 });
 
-cancelPaymentButton?.addEventListener("click", () => {
+deferPaymentButton?.addEventListener("click", () => {
   if (!pendingPaymentOrder) {
     paymentDialog?.close();
     return;
   }
-  const result = store.cancelOrder(pendingPaymentOrder.orderId);
+  const deferredOrderId = pendingPaymentOrder.orderId;
   pendingPaymentOrder = null;
   paymentDialog?.close();
-  applyAutomaticRecommendation({ message: result.message });
+  renderOrders();
+  setFeedback(
+    `订单 ${deferredOrderId} 将继续锁座 15 分钟，请在订单中心完成支付或主动取消。`,
+    "info",
+  );
 });
 
 paymentDialog?.addEventListener("cancel", (event) => {
   event.preventDefault();
-  cancelPaymentButton?.click();
+  deferPaymentButton?.click();
 });
 
 function refreshFromConditions() {
@@ -171,24 +176,42 @@ function handleTicketTypeChange() {
     group: 5,
   }[ticketTypeSelect?.value] || 1;
   peopleCountInput.value = String(defaultPeopleCount);
+  if (hasTeenInput) hasTeenInput.checked = ticketTypeSelect?.value === "family";
   refreshFromConditions();
 }
 
 function handlePeopleCountChange() {
   peopleCountInput.value = String(getPeopleCount());
-  if (ticketTypeSelect?.value === "couple" && getPeopleCount() !== 2) {
-    ticketTypeSelect.value = "single";
-    setFeedback("情侣票固定为 2 人；人数已修改，票种自动回退为个人票。", "info");
+  const peopleCount = getPeopleCount();
+  const ticketType = ticketTypeSelect?.value;
+
+  if (ticketType === "single" && peopleCount > 1) {
+    ticketTypeSelect.value = "group";
+    setFeedback("人数超过 1 人，票种已自动切换为团体票。", "info");
+  } else if (ticketType === "couple" && peopleCount !== 2) {
+    ticketTypeSelect.value = peopleCount > 1 ? "group" : "single";
+    setFeedback(
+      peopleCount > 1
+        ? "情侣票固定为 2 人；人数已修改，票种自动切换为团体票。"
+        : "情侣票固定为 2 人；人数已修改，票种自动回退为个人票。",
+      "info",
+    );
   }
   refreshFromConditions();
 }
 
 function toggleAccessibilityMode() {
   isAccessibilityMode = !isAccessibilityMode;
+  applyAccessibilityModeState();
+  store.setAccessibilityModeEnabled(isAccessibilityMode);
+  refreshFromConditions();
+}
+
+function applyAccessibilityModeState() {
   accessibilityModeButton.setAttribute("aria-pressed", String(isAccessibilityMode));
   accessibilityModeButton.classList.toggle("is-active", isAccessibilityMode);
   preferenceSelect.value = isAccessibilityMode ? "back" : "center";
-  refreshFromConditions();
+  if (needAccessibilityInput) needAccessibilityInput.checked = isAccessibilityMode;
 }
 
 function populateSchedules() {
@@ -288,7 +311,7 @@ function applyAutomaticRecommendation({ message = "" } = {}) {
   renderFocusedSeat(null);
   dispatchSelectionChange(activeRecommendationSeatIds);
   setFeedback(
-    message || "已根据 B 模块的规则推荐相邻座位，可直接确认。",
+    message || "已根据当前购票条件推荐相邻座位，可直接确认。",
     activeRecommendationSeatIds.length === getPeopleCount() ? "success" : "warning",
   );
 }
@@ -519,24 +542,11 @@ function setFeedback(message, type) {
 
 function renderFocusedSeat(seat) {
   if (!hoverSeatText) return;
-  if (!currentScheduleId) {
-    hoverSeatText.textContent = "选择场次后会立即生成热度与推荐座位";
-    return;
-  }
+  if (!currentScheduleId || !seat) return;
   const label = { available: "可选", reserved: "已锁定", sold: "已售" }[seat?.status];
   const accessibility = seat?.seatType === "W" ? " · 无障碍座位" : "";
   const heat = Number.isFinite(seat?.heatScore) ? ` · 热度 ${seat.heatScore.toFixed(2)}` : "";
-  hoverSeatText.textContent = seat
-    ? `当前座位：${seat.seatId}（${label || seat.status}）${accessibility}${heat}`
-    : `无障碍座位：${getAccessibleSeatIds().join("、") || "本厅暂无"}；点击或 Ctrl/Cmd + 点击可手动选座`;
-}
-
-function getAccessibleSeatIds() {
-  const schedule = store.getScheduleById(currentScheduleId);
-  const hall = schedule ? store.getHallById(schedule.hallId) : null;
-  return buildSeatMetadata(hall || { rows: [] })
-    .filter((seat) => seat.seatType === "W")
-    .map((seat) => seat.seatId);
+  hoverSeatText.textContent = `当前座位：${seat.seatId}（${label || seat.status}）${accessibility}${heat}`;
 }
 
 function buildRecommendationInput(schedule) {
@@ -548,7 +558,7 @@ function buildRecommendationInput(schedule) {
     selectedMovieId: schedule?.movieId,
     selectedScheduleId: schedule?.scheduleId,
     needAccessibility: Boolean(needAccessibilityInput?.checked),
-    passengers: parsePassengers(passengersInput?.value || ""),
+    ages: buildAudienceAges(getPeopleCount()),
     preferences: {
       preferCenter: preference === "center",
       preferBack: preference === "back",
@@ -558,86 +568,55 @@ function buildRecommendationInput(schedule) {
   };
 }
 
-function parsePassengers(rawText) {
-  return rawText
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line, index) => {
-      const [namePart, agePart] = line.split(/[,，\s]+/);
-
-      return {
-        name: namePart || `成员${index + 1}`,
-        age: Number(agePart),
-      };
-    })
-    .filter((passenger) => Number.isFinite(passenger.age));
-}
-
-function fillDemoCase(type) {
-  const cases = {
-    couple: {
-      ticketType: "couple",
-      peopleCount: 2,
-      passengers: "张三,21\n李四,22",
-      preference: "center",
-    },
-    family: {
-      ticketType: "family",
-      peopleCount: 3,
-      passengers: "爸爸,40\n妈妈,38\n孩子,12",
-      preference: "back",
-    },
-    group: {
-      ticketType: "group",
-      peopleCount: 6,
-      passengers: "老人,65\n成员2,30\n成员3,31\n成员4,32\n成员5,33\n成员6,34",
-      preference: "back",
-    },
-  };
-  const demo = cases[type];
-
-  if (!demo || !ticketTypeSelect || !peopleCountInput || !passengersInput || !preferenceSelect) {
-    return;
-  }
-
-  ticketTypeSelect.value = demo.ticketType;
-  peopleCountInput.value = String(demo.peopleCount);
-  passengersInput.value = demo.passengers;
-  preferenceSelect.value = demo.preference;
-  if (needAccessibilityInput) needAccessibilityInput.checked = false;
+function buildAudienceAges(peopleCount) {
+  const ages = Array.from({ length: peopleCount }, () => 30);
+  if (hasTeenInput?.checked) ages[0] = 12;
+  if (hasSeniorInput?.checked) ages[ages.length - 1] = 68;
+  return ages;
 }
 
 function renderRecommendation() {
   if (!recommendationList) return;
   if (!currentScheduleId) {
-    recommendationList.innerHTML = "<li>选择场次后载入 B 模块推荐结果。</li>";
-    if (recommendationDebug) recommendationDebug.textContent = "选择场次后生成推荐报告。";
+    recommendationList.innerHTML = "<li>选择场次后会自动显示推荐结果。</li>";
     return;
   }
 
   if (!currentRecommendationReport) {
-    recommendationList.innerHTML = "<li>暂无推荐结果，请点击“生成推荐”。</li>";
-    if (recommendationDebug) recommendationDebug.textContent = "暂无推荐报告。";
+    recommendationList.innerHTML = "<li>暂无推荐结果，请调整购票条件或切换场次。</li>";
     return;
   }
 
   const result = currentRecommendationReport.result;
   const warnings = result.warnings?.length
-    ? `<li>规则提醒：${result.warnings.join("；")}</li>`
+    ? `<li>规则提醒：${formatSentenceList(result.warnings)}</li>`
     : "";
   recommendationList.innerHTML = `
     <li>推荐座位：${result.recommendedSeatIds.join("、") || "暂无"}</li>
     <li>备选座位：${result.fallbackSeatIds.join("、") || "暂无"}</li>
     <li>体验评分：${result.scoreLabel}（${result.scoreValue}/100）</li>
-    <li>推荐区域：${result.recommendedArea || "暂无"}</li>
-    <li>推荐理由：${result.reasons.join("；")}</li>
+    <li>推荐区域：${formatRecommendedArea(result.recommendedArea)}</li>
+    <li>推荐理由：${formatSentenceList(result.reasons)}</li>
     ${warnings}
-    <li>用户仍可清空结果，通过点击或 Ctrl/Cmd + 点击自行选座。</li>
   `;
-  if (recommendationDebug) {
-    recommendationDebug.textContent = currentRecommendationReport.text;
-  }
+}
+
+function formatSentenceList(items) {
+  const sentences = (items || [])
+    .map((item) => String(item).trim().replace(/[。；;.\s]+$/g, ""))
+    .filter(Boolean);
+  return sentences.length ? `${sentences.join("；")}。` : "暂无";
+}
+
+function formatRecommendedArea(area) {
+  return {
+    "middle-center": "中排中央",
+    "middle-back": "后排中央",
+    "front-center": "前排中央",
+    "front-side": "前排侧区",
+    "middle-side": "中排侧区",
+    "back-side": "后排侧区",
+  }[area] || "暂无";
 }
 
 function redrawCurrentScheduleAfterOrder() {
@@ -679,11 +658,16 @@ function openPaymentDialog(order) {
   }
   if (confirmPaymentButton) confirmPaymentButton.textContent = `确认支付 ¥${order.totalPrice}`;
   paymentDialog?.showModal();
-  setFeedback(`订单已创建并锁定座位：${order.seatIds.join("、")}。`, "success");
+  setFeedback(
+    `订单已创建并锁定座位：${order.seatIds.join("、")}。完成支付后可在右侧订单中心查看。`,
+    "success",
+  );
 }
 
 function renderOrders() {
   if (!orderList) return;
+  renderUserSummary();
+  renderCurrentInventory();
   const currentUser = store.getCurrentUser();
   if (!currentUser) {
     orderList.innerHTML = `
@@ -703,7 +687,6 @@ function renderOrders() {
     cancelled: "已取消",
     refunded: "已退票",
   };
-  const inventoryHtml = currentScheduleId ? renderCurrentInventory() : "";
   const orderCards = orders.length
     ? orders.map((order) => {
         const schedule = store.getScheduleById(order.scheduleId);
@@ -740,21 +723,42 @@ function renderOrders() {
     : `<div class="order-empty"><span class="order-empty-icon">票</span><strong>暂无订单</strong><span>完成一次选座购票后，订单会显示在这里。</span></div>`;
 
   orderList.innerHTML = `
-    <div class="order-account">
-      <span class="order-avatar">${(currentUser.nickname || currentUser.username).slice(0, 1)}</span>
-      <div><strong>${currentUser.nickname || currentUser.username}</strong><span>${currentUser.username} · ${currentUser.isGuest ? "游客账户（演示流程）" : currentUser.role === "admin" ? "管理员（查看全部订单）" : "普通用户"}</span></div>
-    </div>
-    ${inventoryHtml}
     <div class="order-card-list">${orderCards}</div>
   `;
 }
 
+function renderUserSummary() {
+  if (!userSummary) return;
+  const currentUser = store.getCurrentUser();
+  if (!currentUser) {
+    userSummary.innerHTML = `<span class="user-avatar">?</span><div><strong>尚未登录</strong><span>登录后查看账号</span></div>`;
+    return;
+  }
+  const displayName = currentUser.nickname || currentUser.username;
+  const roleLabel = currentUser.isGuest
+    ? "游客账户"
+    : currentUser.role === "admin"
+      ? "管理员"
+      : "普通用户";
+  userSummary.innerHTML = `
+    <span class="user-avatar">${displayName.slice(0, 1)}</span>
+    <div><strong>${displayName}</strong><span>${currentUser.username} · ${roleLabel}</span></div>
+  `;
+}
+
 function renderCurrentInventory() {
+  if (!currentInventory) return;
+  if (!currentScheduleId) {
+    currentInventory.innerHTML = "";
+    currentInventory.hidden = true;
+    return;
+  }
   const seatState = store.getSeatStateBySchedule(currentScheduleId);
   const available = seatState.filter((seat) => seat.status === "available").length;
   const reserved = seatState.filter((seat) => seat.status === "reserved").length;
   const sold = seatState.filter((seat) => seat.status === "sold").length;
-  return `<div class="inventory-summary"><strong>当前场次库存</strong><span>总 ${seatState.length}</span><span>可选 ${available}</span><span>锁定 ${reserved}</span><span>已售 ${sold}</span></div>`;
+  currentInventory.innerHTML = `<strong>当前场次库存</strong><span>总 ${seatState.length}</span><span>可选 ${available}</span><span>锁定 ${reserved}</span><span>已售 ${sold}</span>`;
+  currentInventory.hidden = false;
 }
 
 function formatOrderTime(timestamp) {

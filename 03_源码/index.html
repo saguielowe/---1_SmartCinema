@@ -13,7 +13,10 @@
           <p class="eyebrow">Web Frontend Final Project</p>
           <h1>SmartCinema</h1>
         </div>
-        <button id="accessibility-mode-button" class="ghost-button" type="button" aria-pressed="false">无障碍模式</button>
+        <div class="topbar-actions">
+          <div id="user-summary" class="user-summary" aria-label="当前账号"></div>
+          <button id="accessibility-mode-button" class="ghost-button" type="button" aria-pressed="false">无障碍模式</button>
+        </div>
       </header>
 
       <main class="page-grid">
@@ -39,10 +42,6 @@
               <input id="people-count" type="number" min="1" value="1" aria-label="人数" />
             </label>
             <label>
-              成员姓名与年龄
-              <textarea id="passengers-input" rows="5" aria-label="成员姓名与年龄" placeholder="张三,21&#10;李四,22">张三,21</textarea>
-            </label>
-            <label>
               偏好
               <select id="preference" aria-label="偏好">
                 <option value="center">中间区域优先</option>
@@ -50,16 +49,22 @@
                 <option value="aisle">靠过道优先</option>
               </select>
             </label>
-            <label class="checkbox-line">
-              <input id="need-accessibility" type="checkbox" />
-              需要无障碍座位
-            </label>
-            <div class="debug-buttons">
-              <button id="apply-recommendation" class="primary-button" type="button">生成推荐</button>
-              <button class="ghost-button" type="button" data-demo="couple">情侣示例</button>
-              <button class="ghost-button" type="button" data-demo="family">家庭示例</button>
-              <button class="ghost-button" type="button" data-demo="group">团体示例</button>
+            <div class="checkbox-group" role="group" aria-label="观影人群与特殊需求">
+              <span class="checkbox-group-title">观影人群与特殊需求</span>
+              <label class="checkbox-line">
+                <input id="has-teen" type="checkbox" />
+                含 15 岁以下儿童
+              </label>
+              <label class="checkbox-line">
+                <input id="has-senior" type="checkbox" />
+                含 60 岁以上老人
+              </label>
+              <label class="checkbox-line">
+                <input id="need-accessibility" type="checkbox" />
+                需要无障碍座位
+              </label>
             </div>
+            <button id="apply-recommendation" class="primary-button recommendation-action" type="button">重新生成推荐座位</button>
           </form>
         </section>
 
@@ -67,7 +72,7 @@
           <div class="panel-head">
             <div>
               <h2>影厅选座</h2>
-              <p class="panel-note">选择场次后载入 B 的推荐占位；可清空后点击选座，Ctrl/Cmd + 点击多选。已售和锁定座位不可选择。</p>
+              <p class="panel-note">选择场次后会自动推荐座位；也可清空后点击选座，Ctrl/Cmd + 点击多选。已售和锁定座位不可选择。</p>
             </div>
             <div class="legend" aria-label="座位状态图例">
               <span><i class="seat-dot available"></i>可选</span>
@@ -83,6 +88,7 @@
           </div>
 
           <div class="heat-toolbar">
+            <div id="current-inventory" class="inventory-summary" hidden></div>
             <button id="heat-toggle" class="heat-toggle" type="button" aria-pressed="false">显示热度</button>
             <label for="heat-day-select">热度日期</label>
             <select id="heat-day-select" aria-label="热度日期" disabled>
@@ -96,7 +102,7 @@
             <div>
               <strong id="selection-text">请选择场次</strong>
               <p id="selection-feedback" class="selection-feedback">选择场次后会自动推荐座位。</p>
-              <p id="hover-seat" class="hover-seat">选择场次后会立即生成热度与推荐座位</p>
+              <p id="hover-seat" class="hover-seat">将鼠标移到座位上可查看座位状态与热度</p>
             </div>
             <div class="selection-actions">
               <button id="clear-selection" class="ghost-button" type="button">清空重选</button>
@@ -108,14 +114,13 @@
         <aside class="panel side-panel">
           <section>
             <h2>推荐结果</h2>
-            <p class="panel-note">B 模块根据票种、成员年龄、连座规则和体验评分输出可解释推荐。</p>
+            <p class="panel-note">根据票种、观影人群、连座规则和偏好自动推荐合适座位。</p>
             <ul class="result-list" id="recommendation-list"></ul>
-            <pre class="debug-output" id="recommendation-debug">选择场次后生成推荐报告。</pre>
           </section>
 
           <section>
             <h2>订单中心</h2>
-            <p class="panel-note">登录后显示当前账号的订单，数据直接来自 C 模块 Store。</p>
+            <p class="panel-note">可在这里查看订单状态、座位信息和取票码。</p>
             <div id="order-list" class="order-center"></div>
           </section>
         </aside>
@@ -127,9 +132,9 @@
         <p class="eyebrow">ORDER PAYMENT</p>
         <h2 id="payment-dialog-title">确认支付</h2>
         <div id="payment-summary" class="payment-summary"></div>
-        <p class="panel-note">座位已锁定 15 分钟。支付后变为已售，取消订单会立即释放座位。</p>
+        <p class="panel-note">座位已锁定 15 分钟。关闭窗口不会取消订单，可在订单中心继续支付或主动取消。</p>
         <div class="payment-actions">
-          <button id="cancel-payment" class="ghost-button" type="button">取消订单</button>
+          <button id="defer-payment" class="ghost-button" type="button">稍后支付</button>
           <button id="confirm-payment" class="primary-button" type="button">确认支付</button>
         </div>
       </div>

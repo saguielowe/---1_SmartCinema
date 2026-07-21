@@ -26,9 +26,11 @@ const TEN_ROW_LABELS = "ABCDEFGHIJ".split("");
 function createTenRowHall(seatsPerRow, baseCurveDepth) {
   const half = seatsPerRow / 2;
   return TEN_ROW_LABELS.map((rowLabel, rowIndex) => {
-    const isLastRow = rowIndex === TEN_ROW_LABELS.length - 1;
-    const left = isLastRow ? `${"S".repeat(half - 1)}W` : "S".repeat(half);
-    const right = isLastRow ? `W${"S".repeat(half - 1)}` : "S".repeat(half);
+    // F/H/J 排在中央过道两侧各设置一个无障碍位：每厅共 6 个，
+    // 同时覆盖中排与后排，避免年龄规则和无障碍需求互相排斥。
+    const hasAccessibleSeats = [5, 7, 9].includes(rowIndex);
+    const left = hasAccessibleSeats ? `${"S".repeat(half - 1)}W` : "S".repeat(half);
+    const right = hasAccessibleSeats ? `W${"S".repeat(half - 1)}` : "S".repeat(half);
     return {
       rowLabel,
       pattern: `${left}AA${right}`,
@@ -419,6 +421,7 @@ export const usersMock = [
     isGuest: true,
     createdAt: Date.now(),
     accessibilityMode: {
+      enabled: false,
       largeText: false,
       highContrast: false,
       colorBlindFriendly: false,
@@ -438,6 +441,7 @@ export const usersMock = [
     nickname: "测试用户",
     createdAt: Date.now(),
     accessibilityMode: {
+      enabled: false,
       largeText: false,
       highContrast: false,
       colorBlindFriendly: false,
@@ -457,6 +461,7 @@ export const usersMock = [
     nickname: "管理员",
     createdAt: Date.now(),
     accessibilityMode: {
+      enabled: false,
       largeText: false,
       highContrast: false,
       colorBlindFriendly: false,

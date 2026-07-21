@@ -130,7 +130,14 @@ export function createSeatMap(canvas, initialOptions = {}) {
     ctx.font = "600 11px Segoe UI";
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
-    ctx.fillText(row.rowLabel, Math.max(18, startX - 8), baseY + (row.curveDepth || 0) / 2);
+    const leftSeatCellIndex = row.pattern.search(/[SW]/);
+    const labelCurveOffset = getCurveOffset(
+      Math.max(leftSeatCellIndex, 0),
+      row.pattern.length,
+      row.curveDepth || 0,
+    );
+    // 排号和左端最低座位在同一水平线上，避免弧形布局下显得悬在半空。
+    ctx.fillText(row.rowLabel, Math.max(18, startX - 8), baseY + labelCurveOffset + 2);
     ctx.restore();
   }
 
