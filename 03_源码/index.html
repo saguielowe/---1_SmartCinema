@@ -9,7 +9,7 @@
     />
     <meta name="theme-color" content="#08111f" />
     <title>SmartCinema · 智能影院选座</title>
-    <link rel="stylesheet" href="./css/style.css?v=feature-suite-6" />
+    <link rel="stylesheet" href="./css/style.css?v=admin-dashboard-1" />
   </head>
   <body>
     <a class="skip-link" href="#booking-workspace">跳到购票区</a>
@@ -26,6 +26,17 @@
         </div>
 
         <div class="topbar-actions">
+          <button
+            id="admin-comparison-button"
+            class="utility-button"
+            type="button"
+            aria-haspopup="dialog"
+            aria-controls="admin-comparison-dialog"
+            hidden
+          >
+            <span aria-hidden="true">▦</span>
+            全部场次
+          </button>
           <button
             id="user-summary"
             class="user-summary"
@@ -73,16 +84,17 @@
 
       <main id="booking-workspace" class="page-grid" tabindex="-1">
         <section class="panel form-panel" aria-labelledby="conditions-title">
-          <div class="panel-title-row">
-            <div>
-              <p class="panel-kicker">STEP 01</p>
-              <h2 id="conditions-title">选择观影需求</h2>
+          <div id="customer-booking-panel">
+            <div class="panel-title-row">
+              <div>
+                <p class="panel-kicker">STEP 01</p>
+                <h2 id="conditions-title">选择观影需求</h2>
+              </div>
+              <span class="live-badge">智能推荐</span>
             </div>
-            <span class="live-badge">智能推荐</span>
-          </div>
-          <p class="panel-note">选择场次并填写人数，系统会自动给出可解释的座位推荐。</p>
+            <p class="panel-note">选择场次并填写人数，系统会自动给出可解释的座位推荐。</p>
 
-          <form id="ticket-form" class="ticket-form">
+            <form id="ticket-form" class="ticket-form">
             <label for="schedule-select">
               <span>影片与场次</span>
               <select id="schedule-select" required></select>
@@ -128,7 +140,25 @@
             <button id="apply-recommendation" class="primary-button recommendation-action" type="button">
               重新生成推荐
             </button>
-          </form>
+            </form>
+          </div>
+
+          <div id="admin-schedule-panel" hidden>
+            <div class="panel-title-row">
+              <div>
+                <p class="panel-kicker">SHOWTIME CONTROL</p>
+                <h2 id="admin-schedule-title">场次运营</h2>
+              </div>
+              <span class="live-badge">管理员</span>
+            </div>
+            <p class="panel-note">切换场次查看实时座位库存与订单；座位图在管理员模式下仅供查看。</p>
+            <label class="admin-schedule-picker" for="admin-schedule-select">
+              <span>当前场次</span>
+              <select id="admin-schedule-select"></select>
+            </label>
+            <div id="admin-schedule-details" class="admin-schedule-details"></div>
+            <div id="admin-schedule-metrics" class="admin-metric-grid" aria-live="polite"></div>
+          </div>
         </section>
 
         <section class="panel seat-panel" aria-labelledby="seat-map-title">
@@ -136,7 +166,7 @@
             <div>
               <p class="panel-kicker">STEP 02</p>
               <h2 id="seat-map-title">确认你的座位</h2>
-              <p class="panel-note">
+              <p id="seat-map-note" class="panel-note">
                 接受推荐，或清空后手动改选。键盘可用方向键移动，Enter / 空格选择座位。
               </p>
             </div>
@@ -240,7 +270,7 @@
               </div>
               <span id="order-scope-badge" class="scope-badge">我的订单</span>
             </div>
-            <p class="panel-note">按状态筛选订单，继续支付、取消预订或申请退票。</p>
+            <p id="orders-note" class="panel-note">按状态筛选订单，继续支付、取消预订或申请退票。</p>
 
             <div class="order-toolbar">
               <label for="order-status-filter">
@@ -271,6 +301,36 @@
         <span>本系统仅模拟支付，不会产生真实交易</span>
       </footer>
     </div>
+
+    <dialog id="admin-comparison-dialog" class="app-dialog admin-comparison-dialog" aria-labelledby="admin-comparison-title">
+      <div class="dialog-card">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">SHOWTIME COMPARISON</p>
+            <h2 id="admin-comparison-title">全部场次比较</h2>
+          </div>
+          <button class="dialog-close icon-button" type="button" data-close-dialog="admin-comparison-dialog" aria-label="关闭场次比较">×</button>
+        </div>
+        <p class="panel-note">上座率与估算票房按当前座位状态计算，仅用于课程项目的运营演示。</p>
+        <div id="admin-comparison-summary" class="admin-comparison-summary"></div>
+        <div class="admin-comparison-table-wrap">
+          <table class="admin-comparison-table">
+            <thead>
+              <tr>
+                <th scope="col">场次</th>
+                <th scope="col">影厅</th>
+                <th scope="col">已售 / 座位</th>
+                <th scope="col">上座率</th>
+                <th scope="col">订单</th>
+                <th scope="col">估算票房</th>
+                <th scope="col"><span class="visually-hidden">操作</span></th>
+              </tr>
+            </thead>
+            <tbody id="admin-comparison-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </dialog>
 
     <dialog id="payment-dialog" class="app-dialog" aria-labelledby="payment-dialog-title">
       <div class="dialog-card payment-dialog-card">
@@ -430,6 +490,6 @@
 
     <div id="app-announcer" class="visually-hidden" aria-live="assertive" aria-atomic="true"></div>
 
-    <script type="module" src="./js/app.js?v=feature-suite-6"></script>
+    <script type="module" src="./js/app.js?v=admin-dashboard-1"></script>
   </body>
 </html>

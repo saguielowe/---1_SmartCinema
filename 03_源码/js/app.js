@@ -3,6 +3,7 @@ import { store } from "./store.js?v=feature-suite-2";
 import { createSeatMap } from "./seat-map.js?v=feature-suite-2";
 import { createRealtimeSeatClient } from "./realtime.js?v=feature-suite-2";
 import { parseAdvisorRequest } from "./advisor.js?v=feature-suite-2";
+import { calculateComparisonSummary, calculateScheduleMetrics } from "./admin-dashboard.js?v=admin-dashboard-1";
 
 store.initStore();
 
@@ -24,6 +25,21 @@ const realtimeStatusText = realtimeStatus?.querySelector("span");
 const heatLegendItems = document.querySelectorAll(".heat-legend-item");
 const accessibilityModeButton = document.querySelector("#accessibility-mode-button");
 const userSummary = document.querySelector("#user-summary");
+const bookingProgress = document.querySelector(".booking-progress");
+const formPanel = document.querySelector(".form-panel");
+const customerBookingPanel = document.querySelector("#customer-booking-panel");
+const adminSchedulePanel = document.querySelector("#admin-schedule-panel");
+const adminScheduleSelect = document.querySelector("#admin-schedule-select");
+const adminScheduleDetails = document.querySelector("#admin-schedule-details");
+const adminScheduleMetrics = document.querySelector("#admin-schedule-metrics");
+const adminComparisonButton = document.querySelector("#admin-comparison-button");
+const adminComparisonDialog = document.querySelector("#admin-comparison-dialog");
+const adminComparisonSummary = document.querySelector("#admin-comparison-summary");
+const adminComparisonBody = document.querySelector("#admin-comparison-body");
+const seatMapTitle = document.querySelector("#seat-map-title");
+const seatMapNote = document.querySelector("#seat-map-note");
+const ordersTitle = document.querySelector("#orders-title");
+const ordersNote = document.querySelector("#orders-note");
 const progressSteps = [
   document.querySelector("#progress-step-1"),
   document.querySelector("#progress-step-2"),
@@ -142,6 +158,7 @@ const realtimeClient = createRealtimeSeatClient({
   },
 });
 
+renderRoleView();
 renderSelection([]);
 renderRecommendation();
 renderUserSummary();
@@ -156,6 +173,15 @@ scheduleSelect?.addEventListener("change", () => {
   populateHeatWeekOptions(store.getScheduleById(currentScheduleId)?.date);
   seatMap.resetFocus();
   applyAutomaticRecommendation({ message: "已根据场次和购票条件自动选好座位，可直接确认。" });
+});
+adminScheduleSelect?.addEventListener("change", () => selectAdminSchedule(adminScheduleSelect.value));
+adminComparisonButton?.addEventListener("click", openAdminComparison);
+adminComparisonBody?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-admin-schedule-id]");
+  if (!button) return;
+  adminComparisonDialog?.close();
+  selectAdminSchedule(button.dataset.adminScheduleId);
+  adminScheduleSelect?.focus();
 });
 
 peopleCountInput?.addEventListener("input", handlePeopleCountChange);
@@ -619,11 +645,17 @@ function completeAuthentication(result) {
   applyAccessibilityModeState({ wasEnabled, updateSeatMap: true });
   currentOrderPage = 1;
   if (orderStatusFilter) orderStatusFilter.value = "";
+  renderRoleView();
   renderUserSummary();
   renderOrders();
   authDialog?.close();
-  setFeedback(`${result.user?.nickname || result.user?.username || "账号"}已登录，订单视图已更新。`, "success");
-  if (currentScheduleId) refreshFromConditions();
+  setFeedback(
+    store.isAdmin()
+      ? "已进入管理员运营视图，可切换场次查看座位与订单。"
+      : `${result.user?.nickname || result.user?.username || "账号"}已登录，订单视图已更新。`,
+    "success",
+  );
+  if (currentScheduleId && !store.isAdmin()) refreshFromConditions();
 }
 
 function handleLogout() {
@@ -669,15 +701,188 @@ function setProgressStep(step) {
 }
 
 function populateSchedules() {
-  if (!scheduleSelect) return;
   const scheduleOptions = schedules.map((schedule) => {
     const movie = store.getMovieById(schedule.movieId);
     const hall = store.getHallById(schedule.hallId);
     const label = `${movie?.title || "未知影片"} · ${hall?.hallName || "未知影厅"} · ${schedule.date} ${schedule.startTime}`;
     return `<option value="${schedule.scheduleId}">${label}</option>`;
   }).join("");
-  scheduleSelect.innerHTML = `<option value="" selected disabled>请选择影片与场次</option>${scheduleOptions}`;
-  scheduleSelect.value = "";
+  if (scheduleSelect) {
+    scheduleSelect.innerHTML = `<option value="" selected disabled>请选择影片与场次</option>${scheduleOptions}`;
+    scheduleSelect.value = "";
+  }
+  if (adminScheduleSelect) adminScheduleSelect.innerHTML = scheduleOptions;
+}
+
+function renderRoleView() {
+  const isAdmin = store.isAdmin();
+  const wasAdminView = document.body.classList.contains("is-admin-view");
+  document.body.classList.toggle("is-admin-view", isAdmin);
+  if (bookingProgress) bookingProgress.hidden = isAdmin;
+  formPanel?.setAttribute("aria-labelledby", isAdmin ? "admin-schedule-title" : "conditions-title");
+  if (customerBookingPanel) customerBookingPanel.hidden = isAdmin;
+  if (adminSchedulePanel) adminSchedulePanel.hidden = !isAdmin;
+  if (adminComparisonButton) adminComparisonButton.hidden = !isAdmin;
+  if (seatCanvas) {
+    seatCanvas.tabIndex = isAdmin ? -1 : 0;
+    seatCanvas.setAttribute(
+      "aria-label",
+      isAdmin
+        ? "当前场次座位状态图，仅供管理员查看"
+        : "影厅座位图。选择场次后可使用方向键移动，按 Enter 或空格选择。",
+    );
+  }
+  if (seatMapTitle) seatMapTitle.textContent = isAdmin ? "当前场次座位状态" : "确认你的座位";
+  if (seatMapNote) {
+    seatMapNote.textContent = isAdmin
+      ? "查看已售、锁定与可用座位分布；管理员模式不会占用或选择座位。"
+      : "接受推荐，或清空后手动改选。键盘可用方向键移动，Enter / 空格选择座位。";
+  }
+  if (ordersTitle) ordersTitle.textContent = isAdmin ? "当前场次订单" : "订单中心";
+  if (ordersNote) {
+    ordersNote.textContent = isAdmin
+      ? "仅显示左侧所选场次的订单，可按状态筛选并处理取消或退票。"
+      : "按状态筛选订单，继续支付、取消预订或申请退票。";
+  }
+
+  if (isAdmin) {
+    const scheduleExists = schedules.some((schedule) => schedule.scheduleId === currentScheduleId);
+    selectAdminSchedule(scheduleExists ? currentScheduleId : schedules[0]?.scheduleId);
+  } else if (wasAdminView) {
+    currentScheduleId = "";
+    if (scheduleSelect) scheduleSelect.value = "";
+    realtimeClient.setActiveSchedule("");
+    seatMap.update({
+      hall: null,
+      seatState: [],
+      heatMap: [],
+      highlightedSeatIds: [],
+      selectedSeatIds: [],
+      remoteSelectedSeatIds: [],
+    });
+    renderSelection([]);
+    renderFocusedSeat(null);
+    setProgressStep(1);
+  }
+}
+
+function selectAdminSchedule(scheduleId) {
+  if (!store.isAdmin() || !scheduleId) return;
+  const schedule = store.getScheduleById(scheduleId);
+  const hall = schedule ? store.getHallById(schedule.hallId) : null;
+  if (!schedule || !hall) return;
+
+  currentScheduleId = scheduleId;
+  currentOrderPage = 1;
+  if (adminScheduleSelect) adminScheduleSelect.value = scheduleId;
+  realtimeClient.setActiveSchedule(scheduleId);
+  realtimeClient.publishSelection(scheduleId, []);
+  populateHeatWeekOptions(schedule.date);
+  const seatState = store.getSeatStateBySchedule(scheduleId);
+  currentHeatMap = calculateDemandHeatMap(hall, seatState, buildSeatMetadata(hall));
+  activeRecommendationSeatIds = [];
+  currentRecommendationReport = null;
+  seatMap.update({
+    hall,
+    seatState,
+    heatMap: currentHeatMap,
+    highlightedSeatIds: [],
+    selectedSeatIds: [],
+    maxSelected: 1,
+    remoteSelectedSeatIds,
+  });
+  renderAdminSchedule();
+  renderSelection([]);
+  renderOrders();
+  renderFocusedSeat(null);
+}
+
+function getAdminScheduleMetrics(schedule) {
+  const hall = store.getHallById(schedule.hallId);
+  const seatState = store.getSeatStateBySchedule(schedule.scheduleId);
+  const orders = store.getOrders({ scheduleId: schedule.scheduleId });
+  return calculateScheduleMetrics({ schedule, hall, seatState, orders });
+}
+
+function renderAdminSchedule() {
+  if (!store.isAdmin() || !currentScheduleId) return;
+  const schedule = store.getScheduleById(currentScheduleId);
+  const movie = schedule ? store.getMovieById(schedule.movieId) : null;
+  const hall = schedule ? store.getHallById(schedule.hallId) : null;
+  if (!schedule || !hall) return;
+  const metrics = getAdminScheduleMetrics(schedule);
+
+  if (adminScheduleDetails) {
+    adminScheduleDetails.innerHTML = `
+      <strong>${escapeHtml(movie?.title || "未知影片")}</strong>
+      <span>${escapeHtml(`${schedule.date} ${schedule.startTime}–${schedule.endTime}`)}</span>
+      <span>${escapeHtml(`${hall.hallName} · ${formatHallType(hall.hallType)} · ¥${schedule.price}/座`)}</span>
+    `;
+  }
+  if (adminScheduleMetrics) {
+    adminScheduleMetrics.innerHTML = `
+      ${renderAdminMetric("上座率", formatPercent(metrics.occupancyRate), `${metrics.sold}/${metrics.capacity} 已售`)}
+      ${renderAdminMetric("可用座位", metrics.available, `${metrics.reserved} 个锁定`)}
+      ${renderAdminMetric("场次订单", metrics.orderCount, "含全部状态")}
+      ${renderAdminMetric("估算票房", formatCurrency(metrics.estimatedRevenue), "按已售座位计算")}
+    `;
+  }
+}
+
+function renderAdminMetric(label, value, note) {
+  return `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(note)}</small></article>`;
+}
+
+function openAdminComparison() {
+  if (!store.isAdmin() || !adminComparisonDialog) return;
+  const rows = schedules.map((schedule) => {
+    const movie = store.getMovieById(schedule.movieId);
+    const hall = store.getHallById(schedule.hallId);
+    return { schedule, movie, hall, metrics: getAdminScheduleMetrics(schedule) };
+  });
+  const summary = calculateComparisonSummary(rows.map((row) => row.metrics));
+
+  if (adminComparisonSummary) {
+    adminComparisonSummary.innerHTML = `
+      ${renderAdminMetric("综合上座率", formatPercent(summary.occupancyRate), `${summary.sold}/${summary.capacity} 已售`)}
+      ${renderAdminMetric("全部订单", summary.orderCount, `${summary.reserved} 个座位锁定中`)}
+      ${renderAdminMetric("估算总票房", formatCurrency(summary.estimatedRevenue), "按当前已售座位计算")}
+    `;
+  }
+  if (adminComparisonBody) {
+    adminComparisonBody.innerHTML = rows.map(({ schedule, movie, hall, metrics }) => `
+      <tr${schedule.scheduleId === currentScheduleId ? ' class="is-current"' : ""}>
+        <td><strong>${escapeHtml(movie?.title || "未知影片")}</strong><span>${escapeHtml(`${schedule.date} ${schedule.startTime}`)}</span></td>
+        <td>${escapeHtml(hall?.hallName || "未知影厅")}</td>
+        <td>${metrics.sold} / ${metrics.capacity}</td>
+        <td><span class="occupancy-value">${formatPercent(metrics.occupancyRate)}</span><i><b style="width:${Math.round(metrics.occupancyRate * 100)}%"></b></i></td>
+        <td>${metrics.orderCount}</td>
+        <td>${formatCurrency(metrics.estimatedRevenue)}</td>
+        <td><button type="button" data-admin-schedule-id="${escapeHtml(schedule.scheduleId)}">查看</button></td>
+      </tr>
+    `).join("");
+  }
+  adminComparisonDialog.showModal();
+}
+
+function formatPercent(value) {
+  return `${(Number(value || 0) * 100).toFixed(1)}%`;
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat("zh-CN", {
+    style: "currency",
+    currency: "CNY",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+}
+
+function formatHallType(hallType) {
+  return {
+    large: "巨幕厅",
+    medium: "标准厅",
+    small: "小厅",
+  }[hallType] || hallType || "标准厅";
 }
 
 function populateHeatWeekOptions(endDateText) {
@@ -971,7 +1176,7 @@ function getPeopleCount() {
 }
 
 function handleSelectionChange(selectedSeatIds) {
-  if (isApplyingAutomaticSelection || !currentScheduleId) return;
+  if (store.isAdmin() || isApplyingAutomaticSelection || !currentScheduleId) return;
   isManualSelection = true;
   seatMap.update({ highlightedSeatIds: [] });
   renderSelection(selectedSeatIds);
@@ -988,6 +1193,15 @@ function handleSelectionChange(selectedSeatIds) {
 
 function renderSelection(selectedSeatIds) {
   if (!selectionText) return;
+  if (store.isAdmin()) {
+    selectionText.textContent = currentScheduleId ? "管理员只读座位视图" : "请选择场次";
+    if (selectionFeedback) {
+      selectionFeedback.textContent = "座位状态与左侧库存指标同步更新，不会产生选座占用。";
+      selectionFeedback.dataset.type = "info";
+    }
+    if (submitSelectionButton) submitSelectionButton.disabled = true;
+    return;
+  }
   selectionText.textContent = currentScheduleId
     ? pendingPaymentOrder
       ? `已锁定座位：${pendingPaymentOrder.seatIds.join("、")}`
@@ -1132,6 +1346,7 @@ function redrawCurrentScheduleAfterOrder() {
   isApplyingAutomaticSelection = false;
   renderSelection([]);
   renderRecommendation();
+  renderAdminSchedule();
   renderOrders();
   renderFocusedSeat(null);
   realtimeClient.publishSelection(currentScheduleId, []);
@@ -1184,7 +1399,10 @@ function renderOrders() {
   }
 
   const selectedStatus = orderStatusFilter?.value || "";
-  const orders = store.getOrders(selectedStatus ? { status: selectedStatus } : {});
+  const orderFilter = {};
+  if (selectedStatus) orderFilter.status = selectedStatus;
+  if (isAdmin && currentScheduleId) orderFilter.scheduleId = currentScheduleId;
+  const orders = store.getOrders(orderFilter);
   const totalPages = Math.max(1, Math.ceil(orders.length / ORDERS_PER_PAGE));
   currentOrderPage = Math.min(Math.max(1, currentOrderPage), totalPages);
   const pageStart = (currentOrderPage - 1) * ORDERS_PER_PAGE;
@@ -1209,10 +1427,12 @@ function renderOrders() {
         const hall = schedule ? store.getHallById(schedule.hallId) : null;
         const safeOrderId = escapeHtml(order.orderId);
         const actionHtml = order.status === "booked"
-          ? `<button type="button" data-order-action="pay" data-order-id="${safeOrderId}">继续支付</button>
-             <button class="order-action-secondary" type="button" data-order-action="cancel" data-order-id="${safeOrderId}">取消</button>`
+          ? isAdmin
+            ? `<button class="order-action-secondary" type="button" data-order-action="cancel" data-order-id="${safeOrderId}">取消预订</button>`
+            : `<button type="button" data-order-action="pay" data-order-id="${safeOrderId}">继续支付</button>
+               <button class="order-action-secondary" type="button" data-order-action="cancel" data-order-id="${safeOrderId}">取消</button>`
           : order.status === "purchased"
-            ? `<button class="order-action-secondary" type="button" data-order-action="refund" data-order-id="${safeOrderId}">申请退票</button>`
+            ? `<button class="order-action-secondary" type="button" data-order-action="refund" data-order-id="${safeOrderId}">${isAdmin ? "办理退票" : "申请退票"}</button>`
             : "";
         return `
           <article class="order-card">
@@ -1236,7 +1456,7 @@ function renderOrders() {
           </article>
         `;
       }).join("")
-    : `<div class="order-empty"><span class="order-empty-icon">票</span><strong>暂无订单</strong><span>${selectedStatus ? "当前筛选条件下没有订单。" : "完成一次选座购票后，订单会显示在这里。"}</span></div>`;
+    : `<div class="order-empty"><span class="order-empty-icon">票</span><strong>暂无订单</strong><span>${selectedStatus ? "当前筛选条件下没有订单。" : isAdmin ? "该场次还没有订单记录。" : "完成一次选座购票后，订单会显示在这里。"}</span></div>`;
 
   orderList.innerHTML = `
     <div class="order-card-list">${orderCards}</div>
@@ -1306,7 +1526,7 @@ function handleOrderAction(event) {
   if (!button) return;
   const order = store.getOrderById(button.dataset.orderId);
   if (!order) return;
-  setProgressStep(3);
+  if (!store.isAdmin()) setProgressStep(3);
 
   if (button.dataset.orderAction === "pay") {
     pendingPaymentOrder = order;

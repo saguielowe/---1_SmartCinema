@@ -873,6 +873,94 @@ h2 {
   gap: 18px;
 }
 
+body.is-admin-view .recommendation-panel {
+  display: none;
+}
+
+body.is-admin-view #seat-canvas {
+  pointer-events: none;
+}
+
+body.is-admin-view .selection-actions,
+body.is-admin-view .hover-seat {
+  display: none;
+}
+
+body.is-admin-view .selection-bar {
+  justify-content: flex-start;
+}
+
+.admin-schedule-picker {
+  display: grid;
+  gap: 7px;
+  margin-top: 18px;
+  color: var(--text);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.admin-schedule-details {
+  display: grid;
+  gap: 5px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid rgba(10, 143, 131, 0.18);
+  border-radius: 15px;
+  background: var(--accent-soft);
+}
+
+.admin-schedule-details strong {
+  font-size: 0.92rem;
+}
+
+.admin-schedule-details span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.admin-metric-grid,
+.admin-comparison-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.admin-metric-grid article,
+.admin-comparison-summary article {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e0e8ed;
+  border-radius: 13px;
+  background: #ffffff;
+}
+
+.admin-metric-grid article > span,
+.admin-comparison-summary article > span {
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 750;
+}
+
+.admin-metric-grid article > strong,
+.admin-comparison-summary article > strong {
+  overflow: hidden;
+  color: var(--accent-deep);
+  font-size: 1.05rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-metric-grid article > small,
+.admin-comparison-summary article > small {
+  color: #91a0af;
+  font-size: 0.59rem;
+  line-height: 1.35;
+}
+
 .recommendation-panel {
   position: relative;
   overflow: hidden;
@@ -1241,6 +1329,102 @@ h2 {
   padding: 20px 4px 0;
   color: rgba(255, 255, 255, 0.52);
   font-size: 0.7rem;
+}
+
+.admin-comparison-dialog {
+  width: min(94vw, 1120px);
+}
+
+.admin-comparison-dialog .dialog-card {
+  min-width: 860px;
+}
+
+.admin-comparison-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 16px 0;
+}
+
+.admin-comparison-summary article {
+  background: var(--panel-soft);
+}
+
+.admin-comparison-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #e0e7ed;
+  border-radius: 15px;
+}
+
+.admin-comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: #34465a;
+  font-size: 0.74rem;
+}
+
+.admin-comparison-table th,
+.admin-comparison-table td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #e8edf1;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.admin-comparison-table th {
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-size: 0.64rem;
+  letter-spacing: 0.04em;
+}
+
+.admin-comparison-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.admin-comparison-table tbody tr.is-current {
+  background: rgba(10, 143, 131, 0.06);
+}
+
+.admin-comparison-table td:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.admin-comparison-table td:first-child span {
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+
+.admin-comparison-table .occupancy-value {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 800;
+}
+
+.admin-comparison-table td i {
+  display: block;
+  width: 80px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #e5ecef;
+}
+
+.admin-comparison-table td i b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-warm));
+}
+
+.admin-comparison-table button {
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 1px solid rgba(10, 143, 131, 0.24);
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  font-size: 0.68rem;
+  font-weight: 800;
 }
 
 .app-dialog {
@@ -1786,6 +1970,10 @@ html.reduce-motion *::after {
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   }
 
+  body.is-admin-view .side-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .form-panel {
     top: 12px;
   }
@@ -1833,7 +2021,7 @@ html.reduce-motion *::after {
 
   .topbar-actions {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
   }
 
   .user-summary {
@@ -1864,7 +2052,7 @@ html.reduce-motion *::after {
 
   .topbar-actions {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
   }
 
   .user-summary {
@@ -1941,6 +2129,10 @@ html.reduce-motion *::after {
     padding: 18px;
   }
 
+  .admin-comparison-dialog .dialog-card {
+    min-width: 760px;
+  }
+
   .dialog-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1994,6 +2186,11 @@ html.reduce-motion *::after {
 
   .form-row,
   .order-card-details {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-metric-grid,
+  .admin-comparison-summary {
     grid-template-columns: 1fr;
   }
 }
