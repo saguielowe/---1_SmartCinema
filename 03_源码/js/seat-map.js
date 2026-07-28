@@ -2,11 +2,28 @@ const CANVAS_MARGIN = 30;
 const TOP_OFFSET = 72;
 const MAX_CELL_SIZE = 28;
 
-const STATUS_COLORS = {
+const DEFAULT_STATUS_COLORS = {
   available: "#22c55e",
   selected: "#f59e0b",
   sold: "#ef4444",
   reserved: "#fb7185",
+  remote: "#0891b2",
+};
+
+const COLOR_BLIND_STATUS_COLORS = {
+  available: "#0072b2",
+  selected: "#e69f00",
+  sold: "#595959",
+  reserved: "#cc79a7",
+  remote: "#56b4e9",
+};
+
+const HIGH_CONTRAST_STATUS_COLORS = {
+  available: "#00852f",
+  selected: "#ffd400",
+  sold: "#d50000",
+  reserved: "#95005d",
+  remote: "#005fcc",
 };
 
 /**
@@ -29,6 +46,8 @@ export function createSeatMap(canvas, initialOptions = {}) {
   let dragState = null;
   let suppressNextClick = false;
   let animationFrameId = 0;
+  let interactionAnimationFrameId = 0;
+  let interactionEffects = [];
   let recommendationPulse = 0;
   let lastRecommendationRenderTime = 0;
 
@@ -44,12 +63,16 @@ export function createSeatMap(canvas, initialOptions = {}) {
 
   function render() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (options.highContrast) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
     hitAreas = [];
 
     if (!options.hall) {
       ctx.save();
-      ctx.fillStyle = "#667085";
-      ctx.font = "600 24px Segoe UI";
+      ctx.fillStyle = options.highContrast ? "#000000" : "#667085";
+      ctx.font = `${options.highContrast ? "800" : "600"} ${options.largeText ? 30 : 24}px Segoe UI`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("请先选择场次", canvas.width / 2, canvas.height / 2);
@@ -79,6 +102,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
         heatBySeatId,
       });
     });
+    drawInteractionEffects(performance.now());
   }
 
   function drawRow({ row, rowIndex, cellSize, rowSpacing, seatRadius, stateBySeatId, heatBySeatId }) {
@@ -98,9 +122,14 @@ export function createSeatMap(canvas, initialOptions = {}) {
       const y = baseY + getCurveOffset(cellIndex, row.pattern.length, row.curveDepth || 0);
       const storedStatus = stateBySeatId.get(seatId)?.status || "available";
       const heatScore = heatBySeatId.get(seatId) ?? 0;
-      const status = selectedSeatIds.has(seatId) && storedStatus === "available"
-        ? "selected"
-        : storedStatus;
+      const isRemoteSelection = options.remoteSelectedSeatIds.includes(seatId) &&
+        storedStatus === "available";
+      const status = isRemoteSelection
+        ? "remote"
+        : selectedSeatIds.has(seatId) && storedStatus === "available"
+          ? "selected"
+          : storedStatus;
+      const interactiveStatus = isRemoteSelection ? "remote" : storedStatus;
 
       drawSeat({
         x,
@@ -119,15 +148,15 @@ export function createSeatMap(canvas, initialOptions = {}) {
         y,
         radius: Math.max(10, seatRadius + 5),
         seatId,
-        status: storedStatus,
+        status: interactiveStatus,
         seatType: cellType,
         heatScore,
       });
     }
 
     ctx.save();
-    ctx.fillStyle = "#667085";
-    ctx.font = "600 11px Segoe UI";
+    ctx.fillStyle = options.highContrast ? "#000000" : "#667085";
+    ctx.font = `${options.highContrast ? "800" : "600"} ${options.largeText ? 15 : 11}px Segoe UI`;
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
     const leftSeatCellIndex = row.pattern.search(/[SW]/);
@@ -149,18 +178,32 @@ export function createSeatMap(canvas, initialOptions = {}) {
     }
 
     ctx.beginPath();
+    const statusColors = options.highContrast
+      ? HIGH_CONTRAST_STATUS_COLORS
+      : options.colorBlindFriendly
+        ? COLOR_BLIND_STATUS_COLORS
+        : DEFAULT_STATUS_COLORS;
+    const accessibleColor = options.highContrast
+      ? "#0037a6"
+      : options.colorBlindFriendly
+        ? "#009e73"
+        : "#2563eb";
     const isAvailableAccessible = isAccessible && status === "available";
     const isActiveRecommendation = isHighlighted && (status === "available" || status === "selected");
     ctx.fillStyle = isActiveRecommendation
       ? getRecommendationColor()
       : isAvailableAccessible
-        ? "#2563eb"
-        : STATUS_COLORS[status] || STATUS_COLORS.available;
+        ? accessibleColor
+        : statusColors[status] || statusColors.available;
     if (isActiveRecommendation) {
-      ctx.shadowColor = recommendationPulse > 0.5
-        ? "rgba(249, 115, 22, 0.72)"
-        : "rgba(34, 197, 94, 0.72)";
-      ctx.shadowBlur = 7 + recommendationPulse * 5;
+      ctx.shadowColor = options.colorBlindFriendly
+        ? recommendationPulse > 0.5
+          ? "rgba(230, 159, 0, 0.72)"
+          : "rgba(0, 114, 178, 0.72)"
+        : recommendationPulse > 0.5
+          ? "rgba(249, 115, 22, 0.72)"
+          : "rgba(34, 197, 94, 0.72)";
+      ctx.shadowBlur = options.reduceMotion ? 7 : 7 + recommendationPulse * 5;
     }
     if (isAvailableAccessible) {
       // 无障碍位用方形轮廓与普通圆形座位区分，小尺寸影厅图中也能辨认。
@@ -169,10 +212,15 @@ export function createSeatMap(canvas, initialOptions = {}) {
       ctx.arc(x, y, radius, 0, Math.PI * 2);
     }
     ctx.fill();
+    if (options.highContrast) {
+      ctx.strokeStyle = "#000000";
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+    }
 
     if (isAccessible) {
       ctx.beginPath();
-      ctx.strokeStyle = "#2563eb";
+      ctx.strokeStyle = accessibleColor;
       ctx.lineWidth = 2.5;
       if (isAvailableAccessible) {
         ctx.roundRect(x - radius - 3, y - radius - 3, radius * 2 + 6, radius * 2 + 6, 3.5);
@@ -188,23 +236,41 @@ export function createSeatMap(canvas, initialOptions = {}) {
       ctx.fillText("W", x, y + 0.5);
     }
 
+    if (options.colorBlindFriendly && !isAccessible) {
+      drawColorBlindStatusMark({ x, y, radius, status });
+    }
+
+    if (status === "remote") {
+      ctx.beginPath();
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.8;
+      ctx.arc(x, y, Math.max(2.3, radius * 0.34), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x - radius * 0.52, y + radius * 0.5);
+      ctx.quadraticCurveTo(x, y + radius * 0.08, x + radius * 0.52, y + radius * 0.5);
+      ctx.stroke();
+    }
+
     if (status === "selected") {
-      ctx.strokeStyle = "#92400e";
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = options.highContrast ? "#000000" : "#92400e";
+      ctx.lineWidth = options.highContrast ? 2.8 : 1.5;
       ctx.stroke();
     }
 
     if (isFocused) {
       ctx.beginPath();
-      ctx.strokeStyle = "#0f766e";
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = options.highContrast ? "#e6007a" : "#0f766e";
+      ctx.lineWidth = options.highContrast ? 3.5 : 2;
       ctx.arc(x, y, radius + 4, 0, Math.PI * 2);
       ctx.stroke();
     }
 
     if (radius >= 7) {
-      ctx.fillStyle = "#344054";
-      ctx.font = `${Math.max(7, radius)}px Segoe UI`;
+      ctx.fillStyle = options.highContrast ? "#000000" : "#344054";
+      ctx.font = `${options.largeText || options.highContrast ? "700" : "400"} ${
+        options.largeText ? Math.max(12, radius * 1.3) : Math.max(7, radius)
+      }px Segoe UI`;
       ctx.textAlign = "center";
       ctx.fillText(seatId, x, y + radius + 12);
     }
@@ -212,15 +278,57 @@ export function createSeatMap(canvas, initialOptions = {}) {
     ctx.restore();
   }
 
+  function drawColorBlindStatusMark({ x, y, radius, status }) {
+    ctx.save();
+    ctx.strokeStyle = "#ffffff";
+    ctx.fillStyle = "#ffffff";
+    ctx.lineWidth = Math.max(1.2, radius * 0.18);
+    ctx.lineCap = "round";
+
+    if (status === "sold") {
+      const markRadius = radius * 0.42;
+      ctx.beginPath();
+      ctx.moveTo(x - markRadius, y - markRadius);
+      ctx.lineTo(x + markRadius, y + markRadius);
+      ctx.moveTo(x + markRadius, y - markRadius);
+      ctx.lineTo(x - markRadius, y + markRadius);
+      ctx.stroke();
+    } else if (status === "selected") {
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(1.8, radius * 0.24), 0, Math.PI * 2);
+      ctx.fill();
+    } else if (status === "reserved") {
+      ctx.beginPath();
+      ctx.moveTo(x - radius * 0.38, y);
+      ctx.lineTo(x + radius * 0.38, y);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
   function drawHeatBackground({ x, y, radius, heatScore }) {
-    const palette = heatScore >= 0.68
-      ? { core: "239, 68, 68", edge: "254, 202, 202" }
-      : heatScore >= 0.38
-        ? { core: "245, 158, 11", edge: "253, 230, 138" }
-        : { core: "59, 130, 246", edge: "191, 219, 254" };
-    // 热度是座位状态下方的连续色块：保留绿/黄/红座位本体，同时让蓝/黄/红区域足够醒目。
-    const intensity = 0.42 + Math.max(0, Math.min(1, heatScore)) * 0.28;
-    const fieldRadius = radius + 11;
+    const palette = options.colorBlindFriendly
+      ? heatScore >= 0.68
+        ? { core: "204, 121, 167", edge: "239, 196, 220" }
+        : heatScore >= 0.38
+          ? { core: "230, 159, 0", edge: "248, 220, 151" }
+          : { core: "0, 114, 178", edge: "160, 210, 235" }
+      : options.highContrast
+        ? heatScore >= 0.68
+          ? { core: "213, 0, 0", edge: "255, 168, 168" }
+          : heatScore >= 0.38
+            ? { core: "230, 154, 0", edge: "255, 226, 128" }
+            : { core: "0, 133, 47", edge: "155, 230, 176" }
+      : heatScore >= 0.68
+        ? { core: "239, 68, 68", edge: "254, 202, 202" }
+        : heatScore >= 0.38
+          ? { core: "245, 158, 11", edge: "253, 230, 138" }
+          : { core: "34, 197, 94", edge: "187, 247, 208" };
+    // 热度使用座位下方的连续色场；普通模式严格对应绿（冷）/黄（一般）/红（热）。
+    const intensity = (options.highContrast ? 0.56 : 0.46) +
+      Math.max(0, Math.min(1, heatScore)) * 0.26;
+    const fieldRadius = radius + (options.highContrast ? 13 : 11);
     const gradient = ctx.createRadialGradient(x, y, radius * 0.45, x, y, fieldRadius);
     gradient.addColorStop(0, `rgba(${palette.core}, ${intensity})`);
     gradient.addColorStop(0.62, `rgba(${palette.edge}, ${intensity * 0.78})`);
@@ -229,18 +337,26 @@ export function createSeatMap(canvas, initialOptions = {}) {
     ctx.fillStyle = gradient;
     ctx.arc(x, y, fieldRadius, 0, Math.PI * 2);
     ctx.fill();
+    ctx.beginPath();
+    ctx.strokeStyle = `rgba(${palette.core}, ${options.highContrast ? 0.76 : 0.5})`;
+    ctx.lineWidth = options.highContrast ? 2.4 : 1.2;
+    ctx.arc(x, y, radius + 7, 0, Math.PI * 2);
+    ctx.stroke();
   }
 
   function getRecommendationColor() {
-    const green = [34, 197, 94];
-    const orange = [249, 115, 22];
+    const green = options.colorBlindFriendly ? [0, 114, 178] : [34, 197, 94];
+    const orange = options.colorBlindFriendly ? [230, 159, 0] : [249, 115, 22];
+    if (options.reduceMotion) {
+      return `rgb(${green[0]}, ${green[1]}, ${green[2]})`;
+    }
     const mix = recommendationPulse;
     const channel = (index) => Math.round(green[index] + (orange[index] - green[index]) * mix);
     return `rgb(${channel(0)}, ${channel(1)}, ${channel(2)})`;
   }
 
   function syncRecommendationAnimation() {
-    const shouldAnimate = options.highlightedSeatIds.length > 0;
+    const shouldAnimate = options.highlightedSeatIds.length > 0 && !options.reduceMotion;
     if (!shouldAnimate && animationFrameId) {
       window.cancelAnimationFrame(animationFrameId);
       animationFrameId = 0;
@@ -307,6 +423,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
   }
 
   function selectSeat(seatId, { multi = false } = {}) {
+    const wasSelected = selectedSeatIds.has(seatId);
     if (selectedSeatIds.has(seatId)) {
       selectedSeatIds.delete(seatId);
       if (activeSelectedSeatId === seatId) {
@@ -327,16 +444,17 @@ export function createSeatMap(canvas, initialOptions = {}) {
       activeSelectedSeatId = seatId;
     }
 
+    queueInteractionEffect(seatId, wasSelected ? "remove" : "add");
     options.onSeatFocus(hitAreas.find((area) => area.seatId === seatId) || { seatId, status: "available" });
     updateCanvasAccessibilityLabel();
     render();
     emitSelectionChange();
   }
 
-  function canAddSelection() {
+  function canAddSelection({ notify = true } = {}) {
     const maxSelected = Math.max(1, Number(options.maxSelected) || 1);
     if (selectedSeatIds.size < maxSelected) return true;
-    options.onSelectionLimit(maxSelected);
+    if (notify) options.onSelectionLimit(maxSelected);
     return false;
   }
 
@@ -347,36 +465,89 @@ export function createSeatMap(canvas, initialOptions = {}) {
     if (!hit || hit.status !== "available") return;
 
     event.preventDefault();
+    const hasActiveRecommendation = options.highlightedSeatIds.some((seatId) =>
+      selectedSeatIds.has(seatId)
+    );
+    if (hasActiveRecommendation) {
+      selectedSeatIds.clear();
+      activeSelectedSeatId = "";
+    }
     dragState = {
       mode: selectedSeatIds.has(hit.seatId) ? "remove" : "add",
       visited: new Set(),
+      pointerId: event.pointerId,
+      startHit: hit,
+      limitNotified: false,
     };
     canvas.setPointerCapture?.(event.pointerId);
-    applyDragSeat(hit);
+    applyDragSeats([hit]);
   }
 
-  function applyDragSeat(hit) {
-    if (!dragState || dragState.visited.has(hit.seatId) || hit.status !== "available") return;
-    dragState.visited.add(hit.seatId);
+  function applyDragSeats(hits) {
+    if (!dragState || hits.length === 0) return;
 
-    if (dragState.mode === "add") {
-      if (!selectedSeatIds.has(hit.seatId)) {
-        if (!canAddSelection()) return;
-        selectedSeatIds.add(hit.seatId);
+    let lastAppliedHit = null;
+    let selectionChanged = false;
+
+    hits.forEach((hit) => {
+      if (dragState.visited.has(hit.seatId) || hit.status !== "available") return;
+      dragState.visited.add(hit.seatId);
+
+      if (dragState.mode === "add") {
+        if (!selectedSeatIds.has(hit.seatId)) {
+          const canAdd = canAddSelection({ notify: !dragState.limitNotified });
+          if (!canAdd) {
+            dragState.limitNotified = true;
+            return;
+          }
+          selectedSeatIds.add(hit.seatId);
+          selectionChanged = true;
+          queueInteractionEffect(hit.seatId, "add");
+        }
+      } else if (selectedSeatIds.delete(hit.seatId)) {
+        selectionChanged = true;
+        queueInteractionEffect(hit.seatId, "remove");
       }
-    } else {
-      selectedSeatIds.delete(hit.seatId);
+
+      focusedSeatId = hit.seatId;
+      activeSelectedSeatId = hit.seatId;
+      lastAppliedHit = hit;
+    });
+
+    if (!lastAppliedHit) return;
+    options.onSeatFocus({ seatId: lastAppliedHit.seatId, status: lastAppliedHit.status });
+    render();
+    if (selectionChanged) emitSelectionChange();
+  }
+
+  function applyDragPointerEvent(event) {
+    if (!dragState || event.pointerId !== dragState.pointerId) return;
+
+    let samples = [event];
+    if (typeof event.getCoalescedEvents === "function") {
+      const coalescedEvents = event.getCoalescedEvents();
+      if (coalescedEvents.length > 0) {
+        samples = [...coalescedEvents];
+        const finalSample = samples.at(-1);
+        if (finalSample.clientX !== event.clientX || finalSample.clientY !== event.clientY) {
+          samples.push(event);
+        }
+      }
     }
 
-    focusedSeatId = hit.seatId;
-    activeSelectedSeatId = hit.seatId;
-    options.onSeatFocus({ seatId: hit.seatId, status: hit.status });
-    render();
-    emitSelectionChange();
+    samples.forEach((sample) => {
+      const nextPoint = toCanvasPoint(sample);
+      const endHit = findClosestSeatInRow(dragState.startHit, nextPoint.x);
+      const crossedSeats = findSeatRange(dragState.startHit, endHit);
+      applyDragSeats(crossedSeats);
+    });
   }
 
   function endPointerDrag(event) {
-    if (!dragState) return;
+    if (!dragState || event.pointerId !== dragState.pointerId) return;
+    if (event.type === "pointerup") {
+      applyDragPointerEvent(event);
+    }
     canvas.releasePointerCapture?.(event.pointerId);
     dragState = null;
     suppressNextClick = true;
@@ -388,8 +559,8 @@ export function createSeatMap(canvas, initialOptions = {}) {
   function onCanvasMove(event) {
     const point = toCanvasPoint(event);
     const hit = findHitArea(point.x, point.y);
-    if (dragState && hit) {
-      applyDragSeat(hit);
+    if (dragState) {
+      applyDragPointerEvent(event);
     }
     canvas.style.cursor = hit?.status === "available" ? "pointer" : "not-allowed";
     canvas.title = hit ? `${hit.seatId}（${statusLabel(hit.status)}）` : "";
@@ -398,6 +569,90 @@ export function createSeatMap(canvas, initialOptions = {}) {
 
   function findHitArea(x, y) {
     return hitAreas.find((area) => Math.hypot(area.x - x, area.y - y) <= area.radius);
+  }
+
+  function findClosestSeatInRow(startHit, x) {
+    const rowLabel = getSeatPosition(startHit.seatId).rowLabel;
+    return hitAreas
+      .filter((area) => getSeatPosition(area.seatId).rowLabel === rowLabel)
+      .reduce(
+        (closest, area) =>
+          !closest || Math.abs(area.x - x) < Math.abs(closest.x - x) ? area : closest,
+        null,
+      );
+  }
+
+  function findSeatRange(startHit, endHit) {
+    if (!endHit) return [];
+    const start = getSeatPosition(startHit.seatId);
+    const end = getSeatPosition(endHit.seatId);
+    const minimum = Math.min(start.seatNumber, end.seatNumber);
+    const maximum = Math.max(start.seatNumber, end.seatNumber);
+    const direction = start.seatNumber <= end.seatNumber ? 1 : -1;
+
+    return hitAreas
+      .filter((area) => {
+        const position = getSeatPosition(area.seatId);
+        return position.rowLabel === start.rowLabel &&
+          position.seatNumber >= minimum &&
+          position.seatNumber <= maximum;
+      })
+      .sort((left, right) =>
+        (getSeatPosition(left.seatId).seatNumber - getSeatPosition(right.seatId).seatNumber) *
+        direction
+      );
+  }
+
+  function getSeatPosition(seatId) {
+    const separatorIndex = seatId.lastIndexOf("-");
+    return {
+      rowLabel: seatId.slice(0, separatorIndex),
+      seatNumber: Number.parseInt(seatId.slice(separatorIndex + 1), 10),
+    };
+  }
+
+  function queueInteractionEffect(seatId, mode) {
+    if (options.reduceMotion) return;
+    interactionEffects.push({
+      seatId,
+      mode,
+      startedAt: performance.now(),
+    });
+    interactionEffects = interactionEffects.slice(-36);
+    if (!interactionAnimationFrameId) {
+      interactionAnimationFrameId = window.requestAnimationFrame(animateInteractionEffects);
+    }
+  }
+
+  function drawInteractionEffects(timestamp) {
+    if (options.reduceMotion || interactionEffects.length === 0) return;
+    interactionEffects.forEach((effect) => {
+      const elapsed = timestamp - effect.startedAt;
+      const progress = Math.max(0, Math.min(1, elapsed / 460));
+      if (progress >= 1) return;
+      const area = hitAreas.find((item) => item.seatId === effect.seatId);
+      if (!area) return;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.strokeStyle = effect.mode === "add"
+        ? `rgba(245, 158, 11, ${0.9 * (1 - progress)})`
+        : `rgba(37, 99, 235, ${0.82 * (1 - progress)})`;
+      ctx.lineWidth = 3 - progress * 1.4;
+      ctx.arc(area.x, area.y, area.radius + 2 + progress * 13, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    });
+  }
+
+  function animateInteractionEffects(timestamp) {
+    interactionEffects = interactionEffects.filter((effect) => timestamp - effect.startedAt < 460);
+    render();
+    if (interactionEffects.length > 0 && !options.reduceMotion) {
+      interactionAnimationFrameId = window.requestAnimationFrame(animateInteractionEffects);
+    } else {
+      interactionAnimationFrameId = 0;
+    }
   }
 
   function toCanvasPoint(event) {
@@ -410,8 +665,11 @@ export function createSeatMap(canvas, initialOptions = {}) {
 
   function removeUnavailableSelections() {
     const statusBySeatId = new Map(options.seatState.map((seat) => [seat.seatId, seat.status]));
+    const remoteSeatIds = new Set(options.remoteSelectedSeatIds);
     selectedSeatIds = new Set(
-      [...selectedSeatIds].filter((seatId) => statusBySeatId.get(seatId) === "available"),
+      [...selectedSeatIds].filter(
+        (seatId) => statusBySeatId.get(seatId) === "available" && !remoteSeatIds.has(seatId),
+      ),
     );
   }
 
@@ -491,6 +749,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
       canvas.removeEventListener("pointermove", onCanvasMove);
       canvas.removeEventListener("keydown", onCanvasKeyDown);
       if (animationFrameId) window.cancelAnimationFrame(animationFrameId);
+      if (interactionAnimationFrameId) window.cancelAnimationFrame(interactionAnimationFrameId);
     },
   };
 }
@@ -506,7 +765,12 @@ function normalizeOptions(options) {
     seatState: options.seatState || [],
     heatMap: options.heatMap || [],
     showHeat: Boolean(options.showHeat),
+    colorBlindFriendly: Boolean(options.colorBlindFriendly),
+    highContrast: Boolean(options.highContrast),
+    largeText: Boolean(options.largeText),
+    reduceMotion: Boolean(options.reduceMotion),
     highlightedSeatIds: options.highlightedSeatIds || [],
+    remoteSelectedSeatIds: options.remoteSelectedSeatIds || [],
     maxSelected: Math.max(1, Number(options.maxSelected) || 1),
     onSelectionChange: options.onSelectionChange || (() => {}),
     onSelectionLimit: options.onSelectionLimit || (() => {}),
@@ -527,5 +791,6 @@ function statusLabel(status) {
     available: "可选",
     reserved: "已锁定",
     sold: "已售",
+    remote: "其他观众正在选择",
   }[status] || status;
 }

@@ -3,82 +3,149 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SmartCinema</title>
-    <link rel="stylesheet" href="./css/style.css" />
+    <meta
+      name="description"
+      content="SmartCinema 智能影院选座系统：三步完成场次推荐、智能选座与模拟购票。"
+    />
+    <meta name="theme-color" content="#08111f" />
+    <title>SmartCinema · 智能影院选座</title>
+    <link rel="stylesheet" href="./css/style.css?v=feature-suite-6" />
   </head>
   <body>
+    <a class="skip-link" href="#booking-workspace">跳到购票区</a>
+
     <div class="app-shell">
       <header class="topbar">
-        <div>
-          <p class="eyebrow">Web Frontend Final Project</p>
-          <h1>SmartCinema</h1>
+        <div class="brand-lockup">
+          <span class="brand-mark" aria-hidden="true">SC</span>
+          <div>
+            <p class="eyebrow">SMART CINEMA BOOKING</p>
+            <h1>SmartCinema</h1>
+            <p class="brand-subtitle">让每一次观影，都从好座位开始。</p>
+          </div>
         </div>
+
         <div class="topbar-actions">
-          <div id="user-summary" class="user-summary" aria-label="当前账号"></div>
-          <button id="accessibility-mode-button" class="ghost-button" type="button" aria-pressed="false">无障碍模式</button>
+          <button
+            id="user-summary"
+            class="user-summary"
+            type="button"
+            aria-haspopup="dialog"
+            aria-controls="auth-dialog"
+            aria-label="打开账号中心"
+          >
+            <span class="user-avatar" aria-hidden="true">?</span>
+            <span class="user-summary-copy">
+              <strong>正在载入</strong>
+              <span>账号中心</span>
+            </span>
+          </button>
+          <button
+            id="accessibility-mode-button"
+            class="utility-button"
+            type="button"
+            aria-haspopup="dialog"
+            aria-controls="accessibility-dialog"
+            aria-pressed="false"
+          >
+            <span aria-hidden="true">Aa</span>
+            无障碍
+          </button>
         </div>
       </header>
 
-      <main class="page-grid">
-        <section class="panel form-panel">
-          <h2>购票条件</h2>
-          <p class="panel-note">票种、人数和偏好已有默认值；选择场次后会立即推荐并选中座位。</p>
-          <form class="ticket-form" onsubmit="return false">
-            <label>
-              场次
-              <select id="schedule-select" aria-label="场次"></select>
+      <nav class="booking-progress" aria-label="购票进度">
+        <ol>
+          <li id="progress-step-1" class="is-current" aria-current="step">
+            <span>1</span>
+            <div><strong>选择场次</strong><small>填写观影需求</small></div>
+          </li>
+          <li id="progress-step-2">
+            <span>2</span>
+            <div><strong>确认座位</strong><small>接受推荐或改选</small></div>
+          </li>
+          <li id="progress-step-3">
+            <span>3</span>
+            <div><strong>查看订单</strong><small>支付并获取取票码</small></div>
+          </li>
+        </ol>
+      </nav>
+
+      <main id="booking-workspace" class="page-grid" tabindex="-1">
+        <section class="panel form-panel" aria-labelledby="conditions-title">
+          <div class="panel-title-row">
+            <div>
+              <p class="panel-kicker">STEP 01</p>
+              <h2 id="conditions-title">选择观影需求</h2>
+            </div>
+            <span class="live-badge">智能推荐</span>
+          </div>
+          <p class="panel-note">选择场次并填写人数，系统会自动给出可解释的座位推荐。</p>
+
+          <form id="ticket-form" class="ticket-form">
+            <label for="schedule-select">
+              <span>影片与场次</span>
+              <select id="schedule-select" required></select>
             </label>
-            <label>
-              票种
-              <select id="ticket-type" aria-label="票种">
-                <option value="single">个人票</option>
-                <option value="couple">情侣票</option>
-                <option value="family">家庭票</option>
-                <option value="group">团体票</option>
-              </select>
-            </label>
-            <label>
-              人数
-              <input id="people-count" type="number" min="1" value="1" aria-label="人数" />
-            </label>
-            <label>
-              偏好
-              <select id="preference" aria-label="偏好">
+            <div class="form-row">
+              <label for="ticket-type">
+                <span>票种</span>
+                <select id="ticket-type">
+                  <option value="single">个人票</option>
+                  <option value="couple">情侣票</option>
+                  <option value="family">家庭票</option>
+                  <option value="group">团体票</option>
+                </select>
+              </label>
+              <label for="people-count">
+                <span>人数</span>
+                <input id="people-count" type="number" min="1" max="20" value="1" inputmode="numeric" />
+              </label>
+            </div>
+            <label for="preference">
+              <span>座位偏好</span>
+              <select id="preference">
                 <option value="center">中间区域优先</option>
                 <option value="back">后排优先</option>
                 <option value="aisle">靠过道优先</option>
               </select>
             </label>
-            <div class="checkbox-group" role="group" aria-label="观影人群与特殊需求">
-              <span class="checkbox-group-title">观影人群与特殊需求</span>
-              <label class="checkbox-line">
+            <fieldset class="checkbox-group">
+              <legend>观影成员与特殊需求</legend>
+              <label class="checkbox-line" for="has-teen">
                 <input id="has-teen" type="checkbox" />
-                含 15 岁以下儿童
+                <span>含 15 岁以下儿童</span>
               </label>
-              <label class="checkbox-line">
+              <label class="checkbox-line" for="has-senior">
                 <input id="has-senior" type="checkbox" />
-                含 60 岁以上老人
+                <span>含 60 岁以上老人</span>
               </label>
-              <label class="checkbox-line">
+              <label class="checkbox-line" for="need-accessibility">
                 <input id="need-accessibility" type="checkbox" />
-                需要无障碍座位
+                <span>需要无障碍座位</span>
               </label>
-            </div>
-            <button id="apply-recommendation" class="primary-button recommendation-action" type="button">重新生成推荐座位</button>
+            </fieldset>
+            <button id="apply-recommendation" class="primary-button recommendation-action" type="button">
+              重新生成推荐
+            </button>
           </form>
         </section>
 
-        <section class="panel seat-panel">
+        <section class="panel seat-panel" aria-labelledby="seat-map-title">
           <div class="panel-head">
             <div>
-              <h2>影厅选座</h2>
-              <p class="panel-note">选择场次后会自动推荐座位；也可清空后点击选座，Ctrl/Cmd + 点击多选。已售和锁定座位不可选择。</p>
+              <p class="panel-kicker">STEP 02</p>
+              <h2 id="seat-map-title">确认你的座位</h2>
+              <p class="panel-note">
+                接受推荐，或清空后手动改选。键盘可用方向键移动，Enter / 空格选择座位。
+              </p>
             </div>
             <div class="legend" aria-label="座位状态图例">
               <span><i class="seat-dot available"></i>可选</span>
               <span><i class="seat-dot selected"></i>已选</span>
               <span><i class="seat-dot accessible"></i>无障碍</span>
               <span><i class="seat-dot recommended"></i>推荐</span>
+              <span><i class="seat-dot remote"></i>他人正在选择</span>
               <span class="heat-legend-item" hidden><i class="seat-dot heat-hot"></i>热门</span>
               <span class="heat-legend-item" hidden><i class="seat-dot heat-medium"></i>一般</span>
               <span class="heat-legend-item" hidden><i class="seat-dot heat-cold"></i>冷门</span>
@@ -89,57 +156,280 @@
 
           <div class="heat-toolbar">
             <div id="current-inventory" class="inventory-summary" hidden></div>
+            <span id="realtime-status" class="realtime-status" data-state="connecting" role="status">
+              <i aria-hidden="true"></i><span>多人同步连接中…</span>
+            </span>
             <button id="heat-toggle" class="heat-toggle" type="button" aria-pressed="false">显示热度</button>
             <label for="heat-day-select">热度日期</label>
-            <select id="heat-day-select" aria-label="热度日期" disabled>
+            <select id="heat-day-select" disabled>
               <option value="6">选择场次后查看</option>
             </select>
           </div>
-          <div class="screen-label">银幕 SCREEN</div>
-          <canvas id="seat-canvas" width="960" height="560" tabindex="0" aria-label="影厅座位图"></canvas>
+
+          <div class="screen-wrap" aria-hidden="true">
+            <span class="screen-glow"></span>
+            <div class="screen-label">银幕 SCREEN</div>
+          </div>
+
+          <div class="canvas-wrap">
+            <canvas
+              id="seat-canvas"
+              width="960"
+              height="560"
+              tabindex="0"
+              aria-label="影厅座位图。选择场次后可使用方向键移动，按 Enter 或空格选择。"
+            ></canvas>
+          </div>
 
           <div class="selection-bar" aria-live="polite">
-            <div>
+            <div class="selection-copy">
+              <span class="selection-label">当前选择</span>
               <strong id="selection-text">请选择场次</strong>
               <p id="selection-feedback" class="selection-feedback">选择场次后会自动推荐座位。</p>
               <p id="hover-seat" class="hover-seat">将鼠标移到座位上可查看座位状态与热度</p>
             </div>
             <div class="selection-actions">
-              <button id="clear-selection" class="ghost-button" type="button">清空重选</button>
+              <button id="clear-selection" class="secondary-button" type="button">清空重选</button>
               <button id="submit-selection" class="primary-button" type="button" disabled>确认座位</button>
             </div>
           </div>
         </section>
 
-        <aside class="panel side-panel">
-          <section>
-            <h2>推荐结果</h2>
-            <p class="panel-note">根据票种、观影人群、连座规则和偏好自动推荐合适座位。</p>
+        <aside class="side-panel" aria-label="推荐与订单信息">
+          <section class="panel recommendation-panel" aria-labelledby="recommendation-title">
+            <div class="panel-title-row">
+              <div>
+                <p class="panel-kicker">AI CINEMA ADVISOR</p>
+                <h2 id="recommendation-title">AI 观影顾问</h2>
+              </div>
+              <span class="score-orbit" aria-hidden="true">荐</span>
+            </div>
+            <p class="panel-note">用一句话描述人数、年龄和偏好，顾问会自动设置条件并解释推荐理由。</p>
+
+            <div class="advisor-shell">
+              <div class="advisor-prompts" aria-label="顾问问题示例">
+                <button type="button" data-advisor-prompt="我们两个人约会，想坐中间，比较怕吵">情侣 · 中间安静</button>
+                <button type="button" data-advisor-prompt="一家四口，有孩子，希望靠过道方便进出">家庭 · 儿童 · 过道</button>
+                <button type="button" data-advisor-prompt="8人团体，有老人，希望视角好一些">团体 · 老人 · 视角</button>
+              </div>
+              <form id="advisor-form" class="advisor-form">
+                <label for="advisor-question">告诉顾问你的需求</label>
+                <textarea
+                  id="advisor-question"
+                  rows="3"
+                  maxlength="180"
+                  placeholder="例如：5个同学一起看，怕吵，希望坐中后排并且方便进出"
+                  required
+                ></textarea>
+                <button class="primary-button advisor-submit" type="submit">问顾问并推荐</button>
+              </form>
+              <div id="advisor-answer" class="advisor-answer" aria-live="polite">
+                <p>选择一个示例，或输入你的观影需求。</p>
+              </div>
+            </div>
+
+            <div class="recommendation-divider"><span>推荐算法详情</span></div>
             <ul class="result-list" id="recommendation-list"></ul>
           </section>
 
-          <section>
-            <h2>订单中心</h2>
-            <p class="panel-note">可在这里查看订单状态、座位信息和取票码。</p>
+          <section class="panel orders-panel" aria-labelledby="orders-title">
+            <div class="panel-title-row">
+              <div>
+                <p class="panel-kicker">STEP 03</p>
+                <h2 id="orders-title">订单中心</h2>
+              </div>
+              <span id="order-scope-badge" class="scope-badge">我的订单</span>
+            </div>
+            <p class="panel-note">按状态筛选订单，继续支付、取消预订或申请退票。</p>
+
+            <div class="order-toolbar">
+              <label for="order-status-filter">
+                <span class="visually-hidden">筛选订单状态</span>
+                <select id="order-status-filter">
+                  <option value="">全部状态</option>
+                  <option value="booked">待支付</option>
+                  <option value="purchased">已支付</option>
+                  <option value="cancelled">已取消</option>
+                  <option value="refunded">已退票</option>
+                </select>
+              </label>
+              <span id="order-count" class="order-count" aria-live="polite">0 笔订单</span>
+            </div>
+
             <div id="order-list" class="order-center"></div>
+            <nav id="order-pagination" class="order-pagination" aria-label="订单分页" hidden>
+              <button id="order-page-previous" class="icon-button" type="button" aria-label="上一页">←</button>
+              <span id="order-page-status">第 1 / 1 页</span>
+              <button id="order-page-next" class="icon-button" type="button" aria-label="下一页">→</button>
+            </nav>
           </section>
         </aside>
       </main>
+
+      <footer class="site-footer">
+        <span>SmartCinema · 清华大学《Web 前端技术实训》课程项目</span>
+        <span>本系统仅模拟支付，不会产生真实交易</span>
+      </footer>
     </div>
 
-    <dialog id="payment-dialog" class="payment-dialog" aria-labelledby="payment-dialog-title">
-      <div class="payment-dialog-card">
+    <dialog id="payment-dialog" class="app-dialog" aria-labelledby="payment-dialog-title">
+      <div class="dialog-card payment-dialog-card">
         <p class="eyebrow">ORDER PAYMENT</p>
-        <h2 id="payment-dialog-title">确认支付</h2>
+        <h2 id="payment-dialog-title">确认模拟支付</h2>
         <div id="payment-summary" class="payment-summary"></div>
-        <p class="panel-note">座位已锁定 15 分钟。关闭窗口不会取消订单，可在订单中心继续支付或主动取消。</p>
-        <div class="payment-actions">
-          <button id="defer-payment" class="ghost-button" type="button">稍后支付</button>
+        <p class="panel-note">
+          座位已锁定 15 分钟。暂不支付不会取消订单，可稍后从订单中心继续处理。
+        </p>
+        <div class="dialog-actions">
+          <button id="defer-payment" class="secondary-button" type="button">稍后支付</button>
           <button id="confirm-payment" class="primary-button" type="button">确认支付</button>
         </div>
       </div>
     </dialog>
 
-    <script type="module" src="./js/app.js?v=guest-curve-1"></script>
+    <dialog id="auth-dialog" class="app-dialog auth-dialog" aria-labelledby="auth-dialog-title">
+      <div class="dialog-card">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">ACCOUNT CENTER</p>
+            <h2 id="auth-dialog-title">账号中心</h2>
+          </div>
+          <button class="dialog-close icon-button" type="button" data-close-dialog="auth-dialog" aria-label="关闭账号中心">×</button>
+        </div>
+
+        <div class="auth-current">
+          <span id="auth-current-avatar" class="user-avatar" aria-hidden="true">?</span>
+          <div>
+            <strong id="auth-current-name">游客</strong>
+            <span id="auth-current-role">当前使用游客模式</span>
+          </div>
+          <button id="logout-button" class="text-button" type="button">退出到游客</button>
+        </div>
+
+        <div class="auth-tabs" role="tablist" aria-label="登录或注册">
+          <button id="login-tab" role="tab" type="button" aria-selected="true" aria-controls="login-panel">登录</button>
+          <button id="register-tab" role="tab" type="button" aria-selected="false" aria-controls="register-panel">注册</button>
+        </div>
+
+        <section id="login-panel" class="auth-panel" role="tabpanel" aria-labelledby="login-tab">
+          <form id="login-form" class="auth-form">
+            <label for="login-username">
+              <span>用户名</span>
+              <input id="login-username" name="username" autocomplete="username" required />
+            </label>
+            <label for="login-password">
+              <span>密码</span>
+              <input id="login-password" name="password" type="password" autocomplete="current-password" required />
+            </label>
+            <button class="primary-button" type="submit">登录并继续购票</button>
+          </form>
+          <div class="demo-accounts" aria-label="演示账号">
+            <span>演示账号</span>
+            <button type="button" data-demo-username="testuser" data-demo-password="123456">普通用户</button>
+            <button type="button" data-demo-username="admin" data-demo-password="admin123">管理员</button>
+          </div>
+        </section>
+
+        <section id="register-panel" class="auth-panel" role="tabpanel" aria-labelledby="register-tab" hidden>
+          <form id="register-form" class="auth-form">
+            <label for="register-username">
+              <span>用户名</span>
+              <input id="register-username" name="username" minlength="3" maxlength="24" autocomplete="username" required />
+            </label>
+            <label for="register-password">
+              <span>密码</span>
+              <input id="register-password" name="password" type="password" minlength="6" autocomplete="new-password" required />
+            </label>
+            <label for="register-password-confirm">
+              <span>确认密码</span>
+              <input id="register-password-confirm" name="password-confirm" type="password" minlength="6" autocomplete="new-password" required />
+            </label>
+            <button class="primary-button" type="submit">创建账号</button>
+          </form>
+        </section>
+
+        <p id="auth-feedback" class="dialog-feedback" aria-live="polite">
+          也可以关闭窗口，继续使用游客模式体验完整流程。
+        </p>
+      </div>
+    </dialog>
+
+    <dialog
+      id="accessibility-dialog"
+      class="app-dialog accessibility-dialog"
+      aria-labelledby="accessibility-dialog-title"
+    >
+      <div class="dialog-card">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">ACCESSIBILITY</p>
+            <h2 id="accessibility-dialog-title">无障碍与显示设置</h2>
+          </div>
+          <button
+            class="dialog-close icon-button"
+            type="button"
+            data-close-dialog="accessibility-dialog"
+            aria-label="关闭无障碍设置"
+          >×</button>
+        </div>
+        <p class="panel-note">设置会保存在当前账号，下次打开时自动恢复。</p>
+
+        <form id="accessibility-form" class="accessibility-form">
+          <div class="accessibility-options">
+            <label class="switch-line switch-line-master" for="accessibility-master">
+              <span>
+                <strong>无障碍购票辅助</strong>
+                <small>自动选择后排偏好，并优先推荐无障碍座位</small>
+              </span>
+              <input id="accessibility-master" type="checkbox" role="switch" />
+            </label>
+            <label class="switch-line" for="large-text-setting">
+              <span><strong>大字体</strong><small>放大正文、表单和操作按钮</small></span>
+              <input id="large-text-setting" type="checkbox" role="switch" />
+            </label>
+            <label class="switch-line" for="high-contrast-setting">
+              <span><strong>高对比度</strong><small>强化文字、边框和焦点状态</small></span>
+              <input id="high-contrast-setting" type="checkbox" role="switch" />
+            </label>
+            <label class="switch-line" for="color-blind-setting">
+              <span><strong>色盲友好配色</strong><small>使用蓝、橙与图形标记区分座位</small></span>
+              <input id="color-blind-setting" type="checkbox" role="switch" />
+            </label>
+            <label class="switch-line" for="reduce-motion-setting">
+              <span><strong>减少动画</strong><small>关闭推荐座位脉冲和界面过渡</small></span>
+              <input id="reduce-motion-setting" type="checkbox" role="switch" />
+            </label>
+            <label class="switch-line" for="voice-prompt-setting">
+              <span><strong>语音提示</strong><small>朗读重要的选座与订单结果（浏览器支持时）</small></span>
+              <input id="voice-prompt-setting" type="checkbox" role="switch" />
+            </label>
+            <label class="personalization-line" for="theme-setting">
+              <span><strong>个性化界面主题</strong><small>选择影院主色与背景氛围</small></span>
+              <select id="theme-setting">
+                <option value="ocean">午夜青</option>
+                <option value="violet">星河紫</option>
+                <option value="gold">暖金幕</option>
+              </select>
+            </label>
+          </div>
+          <p
+            id="accessibility-feedback"
+            class="dialog-feedback"
+            data-type="info"
+            role="status"
+            aria-live="polite"
+            hidden
+          ></p>
+          <div class="dialog-actions">
+            <button id="reset-accessibility" class="secondary-button" type="button">恢复默认</button>
+            <button class="primary-button" type="submit">保存设置</button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+
+    <div id="app-announcer" class="visually-hidden" aria-live="assertive" aria-atomic="true"></div>
+
+    <script type="module" src="./js/app.js?v=feature-suite-6"></script>
   </body>
 </html>

@@ -15,3 +15,4 @@
 - `b-recommendation.md`
 - `c-order-storage.md`
 - `d-ui-accessibility.md`
+- `d-bonus-features.md`

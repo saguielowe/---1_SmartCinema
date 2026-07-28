@@ -1,10 +1,13 @@
 import { debugRecommendation } from "./recommendation.js?v=guest-1";
-import { store } from "./store.js?v=guest-1";
-import { createSeatMap } from "./seat-map.js?v=curve-2";
+import { store } from "./store.js?v=feature-suite-2";
+import { createSeatMap } from "./seat-map.js?v=feature-suite-2";
+import { createRealtimeSeatClient } from "./realtime.js?v=feature-suite-2";
+import { parseAdvisorRequest } from "./advisor.js?v=feature-suite-2";
 
 store.initStore();
 
 const seatCanvas = document.querySelector("#seat-canvas");
+const ticketForm = document.querySelector("#ticket-form");
 const scheduleSelect = document.querySelector("#schedule-select");
 const peopleCountInput = document.querySelector("#people-count");
 const ticketTypeSelect = document.querySelector("#ticket-type");
@@ -16,20 +19,67 @@ const applyRecommendationButton = document.querySelector("#apply-recommendation"
 const heatDaySelect = document.querySelector("#heat-day-select");
 const heatToggleButton = document.querySelector("#heat-toggle");
 const currentInventory = document.querySelector("#current-inventory");
+const realtimeStatus = document.querySelector("#realtime-status");
+const realtimeStatusText = realtimeStatus?.querySelector("span");
 const heatLegendItems = document.querySelectorAll(".heat-legend-item");
 const accessibilityModeButton = document.querySelector("#accessibility-mode-button");
 const userSummary = document.querySelector("#user-summary");
+const progressSteps = [
+  document.querySelector("#progress-step-1"),
+  document.querySelector("#progress-step-2"),
+  document.querySelector("#progress-step-3"),
+];
 const recommendationList = document.querySelector("#recommendation-list");
+const advisorForm = document.querySelector("#advisor-form");
+const advisorQuestionInput = document.querySelector("#advisor-question");
+const advisorAnswer = document.querySelector("#advisor-answer");
+const advisorPrompts = document.querySelector(".advisor-prompts");
 const selectionText = document.querySelector("#selection-text");
 const selectionFeedback = document.querySelector("#selection-feedback");
 const hoverSeatText = document.querySelector("#hover-seat");
 const clearSelectionButton = document.querySelector("#clear-selection");
 const submitSelectionButton = document.querySelector("#submit-selection");
 const orderList = document.querySelector("#order-list");
+const orderStatusFilter = document.querySelector("#order-status-filter");
+const orderCount = document.querySelector("#order-count");
+const orderScopeBadge = document.querySelector("#order-scope-badge");
+const orderPagination = document.querySelector("#order-pagination");
+const orderPagePrevious = document.querySelector("#order-page-previous");
+const orderPageNext = document.querySelector("#order-page-next");
+const orderPageStatus = document.querySelector("#order-page-status");
 const paymentDialog = document.querySelector("#payment-dialog");
 const paymentSummary = document.querySelector("#payment-summary");
 const deferPaymentButton = document.querySelector("#defer-payment");
 const confirmPaymentButton = document.querySelector("#confirm-payment");
+const authDialog = document.querySelector("#auth-dialog");
+const loginTab = document.querySelector("#login-tab");
+const registerTab = document.querySelector("#register-tab");
+const loginPanel = document.querySelector("#login-panel");
+const registerPanel = document.querySelector("#register-panel");
+const loginForm = document.querySelector("#login-form");
+const registerForm = document.querySelector("#register-form");
+const loginUsernameInput = document.querySelector("#login-username");
+const loginPasswordInput = document.querySelector("#login-password");
+const registerUsernameInput = document.querySelector("#register-username");
+const registerPasswordInput = document.querySelector("#register-password");
+const registerPasswordConfirmInput = document.querySelector("#register-password-confirm");
+const authFeedback = document.querySelector("#auth-feedback");
+const authCurrentAvatar = document.querySelector("#auth-current-avatar");
+const authCurrentName = document.querySelector("#auth-current-name");
+const authCurrentRole = document.querySelector("#auth-current-role");
+const logoutButton = document.querySelector("#logout-button");
+const accessibilityDialog = document.querySelector("#accessibility-dialog");
+const accessibilityForm = document.querySelector("#accessibility-form");
+const accessibilityMasterInput = document.querySelector("#accessibility-master");
+const largeTextSettingInput = document.querySelector("#large-text-setting");
+const highContrastSettingInput = document.querySelector("#high-contrast-setting");
+const colorBlindSettingInput = document.querySelector("#color-blind-setting");
+const reduceMotionSettingInput = document.querySelector("#reduce-motion-setting");
+const voicePromptSettingInput = document.querySelector("#voice-prompt-setting");
+const themeSettingInput = document.querySelector("#theme-setting");
+const accessibilityFeedback = document.querySelector("#accessibility-feedback");
+const resetAccessibilityButton = document.querySelector("#reset-accessibility");
+const appAnnouncer = document.querySelector("#app-announcer");
 
 const schedules = store.getSchedules();
 let currentScheduleId = "";
@@ -37,20 +87,32 @@ let activeRecommendationSeatIds = [];
 let currentHeatMap = [];
 let currentRecommendationReport = null;
 let isApplyingAutomaticSelection = false;
-let isAccessibilityMode = Boolean(store.getCurrentUser()?.accessibilityMode?.enabled);
+let accessibilitySettings = readAccessibilitySettings();
+let isAccessibilityMode = accessibilitySettings.enabled;
 let isManualSelection = false;
 let pendingPaymentOrder = null;
 let isHeatVisible = false;
+let currentOrderPage = 1;
+let currentProgressStep = 1;
+let remoteSelectedSeatIds = [];
+
+const ORDERS_PER_PAGE = 3;
 
 populateSchedules();
-applyAccessibilityModeState();
+applyAccessibilityModeState({ updateSeatMap: false });
+setProgressStep(1);
 
 const seatMap = createSeatMap(seatCanvas, {
   hall: null,
   seatState: [],
   heatMap: [],
   showHeat: isHeatVisible,
+  colorBlindFriendly: accessibilitySettings.colorBlindFriendly,
+  highContrast: accessibilitySettings.highContrast,
+  largeText: accessibilitySettings.largeText,
+  reduceMotion: accessibilitySettings.reduceMotion,
   highlightedSeatIds: [],
+  remoteSelectedSeatIds,
   maxSelected: getPeopleCount(),
   onSelectionChange: handleSelectionChange,
   onSelectionLimit: (limit) => {
@@ -59,14 +121,38 @@ const seatMap = createSeatMap(seatCanvas, {
   onSeatFocus: renderFocusedSeat,
 });
 
+const realtimeClient = createRealtimeSeatClient({
+  onStatus: ({ state, label }) => {
+    if (realtimeStatus) realtimeStatus.dataset.state = state;
+    if (realtimeStatusText) realtimeStatusText.textContent = label;
+  },
+  onRemoteSelections: ({ seatIds, clientCount }) => {
+    remoteSelectedSeatIds = seatIds;
+    const before = seatMap.getSelectedSeatIds();
+    seatMap.update({ remoteSelectedSeatIds });
+    const after = seatMap.getSelectedSeatIds();
+    if (before.length !== after.length) {
+      renderSelection(after);
+      dispatchSelectionChange(after);
+      realtimeClient.publishSelection(currentScheduleId, after);
+      setFeedback("其他观众正在选择相同座位，已自动移除冲突座位。", "warning");
+    } else if (clientCount > 0 && currentScheduleId) {
+      renderFocusedSeat(null);
+    }
+  },
+});
+
 renderSelection([]);
 renderRecommendation();
 renderUserSummary();
 renderOrders();
 renderFocusedSeat(null);
 
+ticketForm?.addEventListener("submit", (event) => event.preventDefault());
 scheduleSelect?.addEventListener("change", () => {
   currentScheduleId = scheduleSelect.value;
+  realtimeClient.setActiveSchedule(currentScheduleId);
+  setProgressStep(2);
   populateHeatWeekOptions(store.getScheduleById(currentScheduleId)?.date);
   seatMap.resetFocus();
   applyAutomaticRecommendation({ message: "已根据场次和购票条件自动选好座位，可直接确认。" });
@@ -85,10 +171,41 @@ applyRecommendationButton?.addEventListener("click", () => {
   }
   applyAutomaticRecommendation({ message: "已根据当前购票条件重新生成推荐座位。" });
 });
-accessibilityModeButton?.addEventListener("click", toggleAccessibilityMode);
+advisorForm?.addEventListener("submit", handleAdvisorQuestion);
+advisorPrompts?.addEventListener("click", (event) => {
+  const promptButton = event.target.closest("[data-advisor-prompt]");
+  if (!promptButton || !advisorQuestionInput) return;
+  advisorQuestionInput.value = promptButton.dataset.advisorPrompt || "";
+  advisorForm?.requestSubmit();
+});
+accessibilityModeButton?.addEventListener("click", openAccessibilityDialog);
 heatDaySelect?.addEventListener("change", refreshHeatForSelectedDay);
 heatToggleButton?.addEventListener("click", toggleHeatVisibility);
 orderList?.addEventListener("click", handleOrderAction);
+orderStatusFilter?.addEventListener("change", () => {
+  currentOrderPage = 1;
+  renderOrders();
+});
+orderPagePrevious?.addEventListener("click", () => {
+  currentOrderPage = Math.max(1, currentOrderPage - 1);
+  renderOrders();
+});
+orderPageNext?.addEventListener("click", () => {
+  currentOrderPage += 1;
+  renderOrders();
+});
+userSummary?.addEventListener("click", openAuthDialog);
+loginTab?.addEventListener("click", () => switchAuthTab("login"));
+registerTab?.addEventListener("click", () => switchAuthTab("register"));
+loginForm?.addEventListener("submit", handleLogin);
+registerForm?.addEventListener("submit", handleRegister);
+logoutButton?.addEventListener("click", handleLogout);
+authDialog?.addEventListener("click", handleDemoAccountClick);
+accessibilityForm?.addEventListener("submit", saveAccessibilitySettings);
+resetAccessibilityButton?.addEventListener("click", resetAccessibilitySettings);
+document.querySelectorAll("[data-close-dialog]").forEach((button) => {
+  button.addEventListener("click", () => document.querySelector(`#${button.dataset.closeDialog}`)?.close());
+});
 clearSelectionButton?.addEventListener("click", () => {
   isManualSelection = true;
   seatMap.update({ highlightedSeatIds: [] });
@@ -116,6 +233,7 @@ submitSelectionButton?.addEventListener("click", () => {
   }
 
   pendingPaymentOrder = result.order;
+  setProgressStep(3);
   window.dispatchEvent(new CustomEvent("smartcinema:seat-selection-submit", {
     detail: { ...detail, selectedSeatIds: [...selectedSeatIds], orderId: result.order.orderId },
   }));
@@ -168,6 +286,98 @@ function refreshFromConditions() {
   applyAutomaticRecommendation({ message: "购票条件已更新，推荐座位已自动刷新。" });
 }
 
+function handleAdvisorQuestion(event) {
+  event.preventDefault();
+  const question = advisorQuestionInput?.value.trim() || "";
+  if (!question) {
+    renderAdvisorWarning("请先描述人数、同行成员或座位偏好。");
+    return;
+  }
+
+  const request = parseAdvisorRequest(question);
+  if (ticketTypeSelect) ticketTypeSelect.value = request.ticketType;
+  if (peopleCountInput) peopleCountInput.value = String(request.peopleCount);
+  if (preferenceSelect) preferenceSelect.value = request.preference;
+  if (hasTeenInput) hasTeenInput.checked = request.hasTeen;
+  if (hasSeniorInput) hasSeniorInput.checked = request.hasSenior;
+  if (needAccessibilityInput) needAccessibilityInput.checked = request.needAccessibility;
+
+  if (!currentScheduleId) {
+    const firstScheduleOption = [...(scheduleSelect?.options || [])].find((option) => option.value);
+    if (!firstScheduleOption) {
+      renderAdvisorWarning("当前没有可用场次，暂时无法生成座位推荐。");
+      return;
+    }
+    scheduleSelect.value = firstScheduleOption.value;
+    currentScheduleId = firstScheduleOption.value;
+    realtimeClient.setActiveSchedule(currentScheduleId);
+    setProgressStep(2);
+    populateHeatWeekOptions(store.getScheduleById(currentScheduleId)?.date);
+    seatMap.resetFocus();
+  }
+
+  applyAutomaticRecommendation({ message: "AI 观影顾问已理解需求并生成推荐。" });
+  renderAdvisorAnswer(question, request);
+}
+
+function renderAdvisorAnswer(question, request) {
+  if (!advisorAnswer) return;
+  const result = currentRecommendationReport?.result;
+  const seatIds = result?.recommendedSeatIds || [];
+  if (seatIds.length === 0) {
+    renderAdvisorWarning(result?.warnings?.[0] || "当前余票无法满足需求，请减少人数或切换场次。");
+    return;
+  }
+
+  const angleScore = Math.round((result.scoreDetails?.angle || 0) * 100);
+  const distanceScore = Math.round((result.scoreDetails?.distance || 0) * 100);
+  const spacingScore = Math.round((result.scoreDetails?.spacing || 0) * 100);
+  const viewReason = `视角：中轴与排距综合得分 ${angleScore}/${distanceScore}，${
+    request.wantsCenter && request.preference === "center"
+      ? "已优先响应中央视角诉求"
+      : request.wantsCenter
+        ? "在更高优先级的进出需求下尽量靠近舒适视角"
+        : "兼顾正对银幕与舒适距离"
+  }。`;
+  const noiseReason = `噪音：周边空位得分 ${spacingScore}，${
+    request.wantsQuiet && request.preference === "back"
+      ? "已倾向中后排和干扰较少区域"
+      : request.wantsQuiet
+        ? "在过道优先的同时用周边空位评分减少拥挤干扰"
+        : "尽量避开拥挤干扰"
+  }。`;
+  const convenienceReason = request.wantsAisle
+    ? "便捷性：已提高靠过道座位权重，方便入场、离场或临时起身。"
+    : request.needAccessibility
+      ? "便捷性：已启用无障碍座位需求，并优先考虑通行便利。"
+      : "便捷性：在不牺牲主要视角的前提下保留合理进出路径。";
+  const audienceReason = request.hasTeen || request.hasSenior
+    ? `成员规则：${request.hasTeen ? "已避开儿童不适合的前三排" : ""}${
+      request.hasTeen && request.hasSenior ? "；" : ""
+    }${request.hasSenior ? "已避开老人不适合的最后三排" : ""}。`
+    : "";
+
+  advisorAnswer.dataset.state = "success";
+  advisorAnswer.innerHTML = `
+    <p><strong>推荐 ${escapeHtml(seatIds.join("、"))}</strong> · ${escapeHtml(result.scoreLabel)} ${
+      result.scoreValue
+    }/100</p>
+    <p>我理解的是：“${escapeHtml(question)}”</p>
+    <ul>
+      <li>${escapeHtml(viewReason)}</li>
+      <li>${escapeHtml(noiseReason)}</li>
+      <li>${escapeHtml(convenienceReason)}</li>
+      ${audienceReason ? `<li>${escapeHtml(audienceReason)}</li>` : ""}
+    </ul>
+  `;
+}
+
+function renderAdvisorWarning(message) {
+  if (!advisorAnswer) return;
+  advisorAnswer.dataset.state = "warning";
+  advisorAnswer.innerHTML = `<p><strong>暂时无法推荐：</strong>${escapeHtml(message)}</p>`;
+}
+
 function handleTicketTypeChange() {
   const defaultPeopleCount = {
     single: 1,
@@ -200,18 +410,262 @@ function handlePeopleCountChange() {
   refreshFromConditions();
 }
 
-function toggleAccessibilityMode() {
-  isAccessibilityMode = !isAccessibilityMode;
-  applyAccessibilityModeState();
-  store.setAccessibilityModeEnabled(isAccessibilityMode);
-  refreshFromConditions();
+function readAccessibilitySettings() {
+  const saved = store.getCurrentUser()?.accessibilityMode || {};
+  return {
+    enabled: Boolean(saved.enabled),
+    largeText: Boolean(saved.largeText),
+    highContrast: Boolean(saved.highContrast),
+    colorBlindFriendly: Boolean(saved.colorBlindFriendly),
+    reduceMotion: Boolean(saved.reduceMotion),
+    voicePrompt: Boolean(saved.voicePrompt),
+    theme: ["ocean", "violet", "gold"].includes(saved.theme) ? saved.theme : "ocean",
+  };
 }
 
-function applyAccessibilityModeState() {
-  accessibilityModeButton.setAttribute("aria-pressed", String(isAccessibilityMode));
-  accessibilityModeButton.classList.toggle("is-active", isAccessibilityMode);
-  preferenceSelect.value = isAccessibilityMode ? "back" : "center";
-  if (needAccessibilityInput) needAccessibilityInput.checked = isAccessibilityMode;
+function openAccessibilityDialog() {
+  syncAccessibilityForm();
+  setAccessibilityFeedback("");
+  accessibilityDialog?.showModal();
+  window.setTimeout(() => accessibilityMasterInput?.focus(), 0);
+}
+
+function syncAccessibilityForm() {
+  if (accessibilityMasterInput) accessibilityMasterInput.checked = accessibilitySettings.enabled;
+  if (largeTextSettingInput) largeTextSettingInput.checked = accessibilitySettings.largeText;
+  if (highContrastSettingInput) highContrastSettingInput.checked = accessibilitySettings.highContrast;
+  if (colorBlindSettingInput) colorBlindSettingInput.checked = accessibilitySettings.colorBlindFriendly;
+  if (reduceMotionSettingInput) reduceMotionSettingInput.checked = accessibilitySettings.reduceMotion;
+  if (voicePromptSettingInput) voicePromptSettingInput.checked = accessibilitySettings.voicePrompt;
+  if (themeSettingInput) themeSettingInput.value = accessibilitySettings.theme;
+}
+
+function saveAccessibilitySettings(event) {
+  event.preventDefault();
+  const wasEnabled = isAccessibilityMode;
+  accessibilitySettings = {
+    enabled: Boolean(accessibilityMasterInput?.checked),
+    largeText: Boolean(largeTextSettingInput?.checked),
+    highContrast: Boolean(highContrastSettingInput?.checked),
+    colorBlindFriendly: Boolean(colorBlindSettingInput?.checked),
+    reduceMotion: Boolean(reduceMotionSettingInput?.checked),
+    voicePrompt: Boolean(voicePromptSettingInput?.checked),
+    theme: themeSettingInput?.value || "ocean",
+  };
+  isAccessibilityMode = accessibilitySettings.enabled;
+
+  try {
+    const currentUser = store.getCurrentUser();
+    if (currentUser) {
+      let saveResult;
+      if (typeof store.setAccessibilitySettings === "function") {
+        saveResult = store.setAccessibilitySettings(accessibilitySettings);
+      } else {
+        // 兼容仍缓存旧 store.js 的页面，避免保存按钮静默失效。
+        currentUser.accessibilityMode = {
+          ...(currentUser.accessibilityMode || {}),
+          ...accessibilitySettings,
+        };
+        saveResult = store.setAccessibilityModeEnabled?.(accessibilitySettings.enabled);
+      }
+      if (saveResult?.success === false) {
+        throw new Error(saveResult.message || "账号设置写入失败");
+      }
+    }
+    applyAccessibilityModeState({ wasEnabled });
+  } catch (error) {
+    console.error("[Accessibility] 保存显示设置失败", error);
+    setAccessibilityFeedback("保存失败，请刷新页面后重试。", "warning");
+    return;
+  }
+
+  accessibilityDialog?.close();
+  if (currentScheduleId) refreshFromConditions();
+  setFeedback("无障碍与显示设置已保存，并同步到当前账号。", "success");
+}
+
+function resetAccessibilitySettings() {
+  [
+    accessibilityMasterInput,
+    largeTextSettingInput,
+    highContrastSettingInput,
+    colorBlindSettingInput,
+    reduceMotionSettingInput,
+    voicePromptSettingInput,
+  ].forEach((input) => {
+    if (input) input.checked = false;
+  });
+  if (themeSettingInput) themeSettingInput.value = "ocean";
+  setAccessibilityFeedback("");
+}
+
+function setAccessibilityFeedback(message, type = "info") {
+  if (!accessibilityFeedback) return;
+  accessibilityFeedback.textContent = message;
+  accessibilityFeedback.dataset.type = type;
+  accessibilityFeedback.hidden = !message;
+}
+
+function applyAccessibilityModeState({ wasEnabled = false, updateSeatMap = true } = {}) {
+  document.documentElement.classList.toggle("is-large-text", accessibilitySettings.largeText);
+  document.documentElement.classList.toggle("reduce-motion", accessibilitySettings.reduceMotion);
+  document.body.classList.toggle("is-high-contrast", accessibilitySettings.highContrast);
+  document.body.classList.toggle("is-colorblind", accessibilitySettings.colorBlindFriendly);
+  document.body.dataset.theme = accessibilitySettings.theme;
+
+  accessibilityModeButton?.setAttribute("aria-pressed", String(isAccessibilityMode));
+  const enabledFeatureCount = [
+    accessibilitySettings.largeText,
+    accessibilitySettings.highContrast,
+    accessibilitySettings.colorBlindFriendly,
+    accessibilitySettings.reduceMotion,
+    accessibilitySettings.voicePrompt,
+  ].filter(Boolean).length;
+  if (accessibilityModeButton) {
+    accessibilityModeButton.lastChild.textContent = enabledFeatureCount
+      ? ` 无障碍 · ${enabledFeatureCount}`
+      : " 无障碍";
+  }
+
+  if (isAccessibilityMode) {
+    if (preferenceSelect) preferenceSelect.value = "back";
+    if (needAccessibilityInput) needAccessibilityInput.checked = true;
+  } else if (wasEnabled) {
+    if (preferenceSelect?.value === "back") preferenceSelect.value = "center";
+    if (needAccessibilityInput) needAccessibilityInput.checked = false;
+  }
+
+  if (updateSeatMap) {
+    seatMap.update({
+      colorBlindFriendly: accessibilitySettings.colorBlindFriendly,
+      highContrast: accessibilitySettings.highContrast,
+      largeText: accessibilitySettings.largeText,
+      reduceMotion: accessibilitySettings.reduceMotion,
+    });
+  }
+}
+
+function openAuthDialog() {
+  renderAuthCurrentUser();
+  setAuthFeedback("也可以关闭窗口，继续使用游客模式体验完整流程。", "info");
+  switchAuthTab("login");
+  authDialog?.showModal();
+  window.setTimeout(() => loginUsernameInput?.focus(), 0);
+}
+
+function switchAuthTab(tabName) {
+  const isLogin = tabName === "login";
+  loginTab?.setAttribute("aria-selected", String(isLogin));
+  registerTab?.setAttribute("aria-selected", String(!isLogin));
+  if (loginPanel) loginPanel.hidden = !isLogin;
+  if (registerPanel) registerPanel.hidden = isLogin;
+}
+
+function handleLogin(event) {
+  event.preventDefault();
+  const username = loginUsernameInput?.value.trim() || "";
+  const password = loginPasswordInput?.value || "";
+  const result = store.login(username, password);
+  if (!result.success) {
+    setAuthFeedback(result.message, "warning");
+    loginPasswordInput?.focus();
+    return;
+  }
+  completeAuthentication(result);
+}
+
+function handleRegister(event) {
+  event.preventDefault();
+  const username = registerUsernameInput?.value.trim() || "";
+  const password = registerPasswordInput?.value || "";
+  const passwordConfirm = registerPasswordConfirmInput?.value || "";
+  if (username.length < 3) {
+    setAuthFeedback("用户名至少需要 3 个字符。", "warning");
+    registerUsernameInput?.focus();
+    return;
+  }
+  if (password.length < 6) {
+    setAuthFeedback("密码至少需要 6 个字符。", "warning");
+    registerPasswordInput?.focus();
+    return;
+  }
+  if (password !== passwordConfirm) {
+    setAuthFeedback("两次输入的密码不一致。", "warning");
+    registerPasswordConfirmInput?.focus();
+    return;
+  }
+
+  const result = store.register(username, password);
+  if (!result.success) {
+    setAuthFeedback(result.message, "warning");
+    return;
+  }
+  completeAuthentication(result);
+  registerForm?.reset();
+}
+
+function handleDemoAccountClick(event) {
+  const button = event.target.closest("[data-demo-username]");
+  if (!button) return;
+  if (loginUsernameInput) loginUsernameInput.value = button.dataset.demoUsername || "";
+  if (loginPasswordInput) loginPasswordInput.value = button.dataset.demoPassword || "";
+  loginForm?.requestSubmit();
+}
+
+function completeAuthentication(result) {
+  const wasEnabled = isAccessibilityMode;
+  accessibilitySettings = readAccessibilitySettings();
+  isAccessibilityMode = accessibilitySettings.enabled;
+  applyAccessibilityModeState({ wasEnabled, updateSeatMap: true });
+  currentOrderPage = 1;
+  if (orderStatusFilter) orderStatusFilter.value = "";
+  renderUserSummary();
+  renderOrders();
+  authDialog?.close();
+  setFeedback(`${result.user?.nickname || result.user?.username || "账号"}已登录，订单视图已更新。`, "success");
+  if (currentScheduleId) refreshFromConditions();
+}
+
+function handleLogout() {
+  const currentUser = store.getCurrentUser();
+  if (!currentUser || currentUser.isGuest) {
+    authDialog?.close();
+    return;
+  }
+  store.logout();
+  window.location.reload();
+}
+
+function setAuthFeedback(message, type) {
+  if (!authFeedback) return;
+  authFeedback.textContent = message;
+  authFeedback.dataset.type = type;
+}
+
+function renderAuthCurrentUser() {
+  const currentUser = store.getCurrentUser();
+  const displayName = currentUser?.nickname || currentUser?.username || "游客";
+  const roleLabel = currentUser?.isGuest
+    ? "当前使用游客模式"
+    : currentUser?.role === "admin"
+      ? "管理员 · 可查看全部订单"
+      : "普通用户 · 仅查看自己的订单";
+  if (authCurrentAvatar) authCurrentAvatar.textContent = displayName.slice(0, 1);
+  if (authCurrentName) authCurrentName.textContent = displayName;
+  if (authCurrentRole) authCurrentRole.textContent = roleLabel;
+  if (logoutButton) logoutButton.hidden = !currentUser || currentUser.isGuest;
+}
+
+function setProgressStep(step) {
+  currentProgressStep = Math.min(3, Math.max(1, step));
+  progressSteps.forEach((item, index) => {
+    if (!item) return;
+    const stepNumber = index + 1;
+    item.classList.toggle("is-current", stepNumber === currentProgressStep);
+    item.classList.toggle("is-complete", stepNumber < currentProgressStep);
+    if (stepNumber === currentProgressStep) item.setAttribute("aria-current", "step");
+    else item.removeAttribute("aria-current");
+  });
 }
 
 function populateSchedules() {
@@ -272,6 +726,12 @@ function applyAutomaticRecommendation({ message = "" } = {}) {
   const schedule = store.getScheduleById(currentScheduleId);
   const hall = schedule ? store.getHallById(schedule.hallId) : null;
   const seatState = currentScheduleId ? store.getSeatStateBySchedule(currentScheduleId) : [];
+  const remoteSeatSet = new Set(remoteSelectedSeatIds);
+  const recommendationSeatState = seatState.map((seat) => (
+    remoteSeatSet.has(seat.seatId) && seat.status === "available"
+      ? { ...seat, status: "reserved" }
+      : seat
+  ));
 
   if (!hall) {
     activeRecommendationSeatIds = [];
@@ -281,6 +741,7 @@ function applyAutomaticRecommendation({ message = "" } = {}) {
     renderSelection([]);
     renderRecommendation();
     renderOrders();
+    realtimeClient.setActiveSchedule("");
     return;
   }
 
@@ -288,7 +749,7 @@ function applyAutomaticRecommendation({ message = "" } = {}) {
   currentHeatMap = calculateDemandHeatMap(hall, seatState, seatMeta);
   currentRecommendationReport = debugRecommendation(buildRecommendationInput(schedule), {
     hall,
-    seatState,
+    seatState: recommendationSeatState,
     schedule,
   });
   activeRecommendationSeatIds = currentRecommendationReport.result.recommendedSeatIds;
@@ -310,6 +771,7 @@ function applyAutomaticRecommendation({ message = "" } = {}) {
   renderOrders();
   renderFocusedSeat(null);
   dispatchSelectionChange(activeRecommendationSeatIds);
+  realtimeClient.publishSelection(currentScheduleId, activeRecommendationSeatIds);
   setFeedback(
     message || "已根据当前购票条件推荐相邻座位，可直接确认。",
     activeRecommendationSeatIds.length === getPeopleCount() ? "success" : "warning",
@@ -397,7 +859,7 @@ function calculateDemandHeatMap(hall, seatState, seatMeta) {
   const maximumScore = Math.max(...scoreValues);
   const scoreRange = Math.max(1e-6, maximumScore - minimumScore);
 
-  // 每天都按本厅最低到最高热度归一化，确保蓝/黄/红三个区域在演示中均清晰可辨。
+  // 每天都按本厅最低到最高热度归一化，确保绿/黄/红三个区域在演示中均清晰可辨。
   return combinedScores.map((item) => {
     const heatScore = (item.score - minimumScore) / scoreRange;
     return {
@@ -418,8 +880,11 @@ function getSourceActivationDay(seatId) {
 
 function findBestSeatGroup({ hall, seatState, heatMap, seatMeta, anchorSeatId = "" }) {
   const count = getPeopleCount();
+  const remoteSeatSet = new Set(remoteSelectedSeatIds);
   const available = new Set(
-    seatState.filter((seat) => seat.status === "available").map((seat) => seat.seatId),
+    seatState
+      .filter((seat) => seat.status === "available" && !remoteSeatSet.has(seat.seatId))
+      .map((seat) => seat.seatId),
   );
   const heatBySeatId = new Map(heatMap.map((item) => [item.seatId, item.heatScore]));
   const metaBySeatId = new Map(seatMeta.map((seat) => [seat.seatId, seat]));
@@ -502,7 +967,7 @@ function findBestSeatGroup({ hall, seatState, heatMap, seatMeta, anchorSeatId = 
 
 function getPeopleCount() {
   const parsed = Number.parseInt(peopleCountInput?.value || "1", 10);
-  return Math.max(1, Number.isFinite(parsed) ? parsed : 1);
+  return Math.min(20, Math.max(1, Number.isFinite(parsed) ? parsed : 1));
 }
 
 function handleSelectionChange(selectedSeatIds) {
@@ -512,6 +977,7 @@ function handleSelectionChange(selectedSeatIds) {
   renderSelection(selectedSeatIds);
   renderRecommendation();
   dispatchSelectionChange(selectedSeatIds);
+  realtimeClient.publishSelection(currentScheduleId, selectedSeatIds);
   setFeedback(
     selectedSeatIds.length === getPeopleCount()
       ? "手动选座数量已满足人数要求，可确认座位。"
@@ -538,12 +1004,39 @@ function setFeedback(message, type) {
   if (!selectionFeedback) return;
   selectionFeedback.textContent = message;
   selectionFeedback.dataset.type = type;
+  announce(message);
+}
+
+function announce(message) {
+  if (appAnnouncer) {
+    appAnnouncer.textContent = "";
+    window.requestAnimationFrame(() => {
+      appAnnouncer.textContent = message;
+    });
+  }
+
+  if (
+    accessibilitySettings.voicePrompt
+    && "speechSynthesis" in window
+    && typeof window.SpeechSynthesisUtterance === "function"
+  ) {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(message);
+    utterance.lang = "zh-CN";
+    utterance.rate = 0.95;
+    window.speechSynthesis.speak(utterance);
+  }
 }
 
 function renderFocusedSeat(seat) {
   if (!hoverSeatText) return;
   if (!currentScheduleId || !seat) return;
-  const label = { available: "可选", reserved: "已锁定", sold: "已售" }[seat?.status];
+  const label = {
+    available: "可选",
+    reserved: "已锁定",
+    sold: "已售",
+    remote: "其他观众正在选择",
+  }[seat?.status];
   const accessibility = seat?.seatType === "W" ? " · 无障碍座位" : "";
   const heat = Number.isFinite(seat?.heatScore) ? ` · 热度 ${seat.heatScore.toFixed(2)}` : "";
   hoverSeatText.textContent = `当前座位：${seat.seatId}（${label || seat.status}）${accessibility}${heat}`;
@@ -641,6 +1134,7 @@ function redrawCurrentScheduleAfterOrder() {
   renderRecommendation();
   renderOrders();
   renderFocusedSeat(null);
+  realtimeClient.publishSelection(currentScheduleId, []);
 }
 
 function openPaymentDialog(order) {
@@ -649,11 +1143,11 @@ function openPaymentDialog(order) {
   const hall = schedule ? store.getHallById(schedule.hallId) : null;
   if (paymentSummary) {
     paymentSummary.innerHTML = `
-      <span><strong>电影：</strong>${movie?.title || "未知影片"}</span>
-      <span><strong>场次：</strong>${schedule?.date || ""} ${schedule?.startTime || ""} · ${hall?.hallName || ""}</span>
-      <span><strong>座位：</strong>${order.seatIds.join("、")}</span>
-      <span><strong>订单号：</strong>${order.orderId}</span>
-      <span><strong>应付金额：</strong>¥${order.totalPrice}</span>
+      <span><strong>电影：</strong>${escapeHtml(movie?.title || "未知影片")}</span>
+      <span><strong>场次：</strong>${escapeHtml(`${schedule?.date || ""} ${schedule?.startTime || ""} · ${hall?.hallName || ""}`)}</span>
+      <span><strong>座位：</strong>${escapeHtml(order.seatIds.join("、"))}</span>
+      <span><strong>订单号：</strong>${escapeHtml(order.orderId)}</span>
+      <span><strong>应付金额：</strong>¥${escapeHtml(order.totalPrice)}</span>
     `;
   }
   if (confirmPaymentButton) confirmPaymentButton.textContent = `确认支付 ¥${order.totalPrice}`;
@@ -669,6 +1163,13 @@ function renderOrders() {
   renderUserSummary();
   renderCurrentInventory();
   const currentUser = store.getCurrentUser();
+  const isAdmin = store.isAdmin();
+
+  if (orderScopeBadge) {
+    orderScopeBadge.textContent = isAdmin ? "管理员视图" : "我的订单";
+    orderScopeBadge.classList.toggle("is-admin", isAdmin);
+  }
+
   if (!currentUser) {
     orderList.innerHTML = `
       <div class="order-empty">
@@ -677,50 +1178,65 @@ function renderOrders() {
         <span>登录后即可查看个人订单、支付状态和取票码。</span>
       </div>
     `;
+    if (orderCount) orderCount.textContent = "0 笔订单";
+    if (orderPagination) orderPagination.hidden = true;
     return;
   }
 
-  const orders = store.getOrders();
+  const selectedStatus = orderStatusFilter?.value || "";
+  const orders = store.getOrders(selectedStatus ? { status: selectedStatus } : {});
+  const totalPages = Math.max(1, Math.ceil(orders.length / ORDERS_PER_PAGE));
+  currentOrderPage = Math.min(Math.max(1, currentOrderPage), totalPages);
+  const pageStart = (currentOrderPage - 1) * ORDERS_PER_PAGE;
+  const visibleOrders = orders.slice(pageStart, pageStart + ORDERS_PER_PAGE);
+
+  if (orderCount) orderCount.textContent = `${orders.length} 笔订单`;
+  if (orderPagination) orderPagination.hidden = orders.length <= ORDERS_PER_PAGE;
+  if (orderPagePrevious) orderPagePrevious.disabled = currentOrderPage <= 1;
+  if (orderPageNext) orderPageNext.disabled = currentOrderPage >= totalPages;
+  if (orderPageStatus) orderPageStatus.textContent = `第 ${currentOrderPage} / ${totalPages} 页`;
+
   const orderStatusLabel = {
     booked: "待支付",
     purchased: "已支付",
     cancelled: "已取消",
     refunded: "已退票",
   };
-  const orderCards = orders.length
-    ? orders.map((order) => {
+  const orderCards = visibleOrders.length
+    ? visibleOrders.map((order) => {
         const schedule = store.getScheduleById(order.scheduleId);
         const movie = schedule ? store.getMovieById(schedule.movieId) : null;
         const hall = schedule ? store.getHallById(schedule.hallId) : null;
+        const safeOrderId = escapeHtml(order.orderId);
         const actionHtml = order.status === "booked"
-          ? `<button type="button" data-order-action="pay" data-order-id="${order.orderId}">继续支付</button>
-             <button class="order-action-secondary" type="button" data-order-action="cancel" data-order-id="${order.orderId}">取消</button>`
+          ? `<button type="button" data-order-action="pay" data-order-id="${safeOrderId}">继续支付</button>
+             <button class="order-action-secondary" type="button" data-order-action="cancel" data-order-id="${safeOrderId}">取消</button>`
           : order.status === "purchased"
-            ? `<button class="order-action-secondary" type="button" data-order-action="refund" data-order-id="${order.orderId}">申请退票</button>`
+            ? `<button class="order-action-secondary" type="button" data-order-action="refund" data-order-id="${safeOrderId}">申请退票</button>`
             : "";
         return `
           <article class="order-card">
             <div class="order-card-head">
               <div>
-                <span class="order-movie">${movie?.title || "未知影片"}</span>
-                <span class="order-number">${order.orderId}</span>
+                <span class="order-movie">${escapeHtml(movie?.title || "未知影片")}</span>
+                <span class="order-number">${safeOrderId}</span>
               </div>
-              <span class="order-status status-${order.status}">${orderStatusLabel[order.status] || order.status}</span>
+              <span class="order-status status-${escapeHtml(order.status)}">${escapeHtml(orderStatusLabel[order.status] || order.status)}</span>
             </div>
             <div class="order-card-details">
-              <span><b>场次</b>${schedule ? `${schedule.date} ${schedule.startTime}` : order.scheduleId}</span>
-              <span><b>影厅</b>${hall?.hallName || "未知影厅"}</span>
-              <span><b>座位</b>${order.seatIds.join("、")}</span>
-              <span><b>金额</b>¥${order.totalPrice}</span>
+              <span><b>场次</b>${escapeHtml(schedule ? `${schedule.date} ${schedule.startTime}` : order.scheduleId)}</span>
+              <span><b>影厅</b>${escapeHtml(hall?.hallName || "未知影厅")}</span>
+              <span><b>座位</b>${escapeHtml(order.seatIds.join("、"))}</span>
+              <span><b>金额</b>¥${escapeHtml(order.totalPrice)}</span>
               <span><b>下单</b>${formatOrderTime(order.createdAt)}</span>
-              ${order.status === "purchased" ? `<span class="pickup-code"><b>取票码</b>${getPickupCode(order.orderId)}</span>` : ""}
+              ${order.status === "purchased" ? `<span class="pickup-code"><b>取票码</b>${escapeHtml(getPickupCode(order.orderId))}</span>` : ""}
             </div>
-            ${store.isAdmin() ? `<p class="order-owner">用户 ID：${order.userId}</p>` : ""}
+            ${isAdmin ? `<p class="order-owner">用户 ID：${escapeHtml(order.userId)}</p>` : ""}
             ${actionHtml ? `<div class="order-card-actions">${actionHtml}</div>` : ""}
           </article>
         `;
       }).join("")
-    : `<div class="order-empty"><span class="order-empty-icon">票</span><strong>暂无订单</strong><span>完成一次选座购票后，订单会显示在这里。</span></div>`;
+    : `<div class="order-empty"><span class="order-empty-icon">票</span><strong>暂无订单</strong><span>${selectedStatus ? "当前筛选条件下没有订单。" : "完成一次选座购票后，订单会显示在这里。"}</span></div>`;
 
   orderList.innerHTML = `
     <div class="order-card-list">${orderCards}</div>
@@ -731,7 +1247,11 @@ function renderUserSummary() {
   if (!userSummary) return;
   const currentUser = store.getCurrentUser();
   if (!currentUser) {
-    userSummary.innerHTML = `<span class="user-avatar">?</span><div><strong>尚未登录</strong><span>登录后查看账号</span></div>`;
+    userSummary.innerHTML = `
+      <span class="user-avatar" aria-hidden="true">?</span>
+      <span class="user-summary-copy"><strong>尚未登录</strong><span>打开账号中心</span></span>
+    `;
+    userSummary.setAttribute("aria-label", "打开账号中心，当前尚未登录");
     return;
   }
   const displayName = currentUser.nickname || currentUser.username;
@@ -741,9 +1261,13 @@ function renderUserSummary() {
       ? "管理员"
       : "普通用户";
   userSummary.innerHTML = `
-    <span class="user-avatar">${displayName.slice(0, 1)}</span>
-    <div><strong>${displayName}</strong><span>${currentUser.username} · ${roleLabel}</span></div>
+    <span class="user-avatar" aria-hidden="true">${escapeHtml(displayName.slice(0, 1))}</span>
+    <span class="user-summary-copy">
+      <strong>${escapeHtml(displayName)}</strong>
+      <span>${escapeHtml(currentUser.username)} · ${roleLabel}</span>
+    </span>
   `;
+  userSummary.setAttribute("aria-label", `打开账号中心，当前账号：${displayName}，${roleLabel}`);
 }
 
 function renderCurrentInventory() {
@@ -782,6 +1306,7 @@ function handleOrderAction(event) {
   if (!button) return;
   const order = store.getOrderById(button.dataset.orderId);
   if (!order) return;
+  setProgressStep(3);
 
   if (button.dataset.orderAction === "pay") {
     pendingPaymentOrder = order;
@@ -797,6 +1322,15 @@ function handleOrderAction(event) {
   setFeedback(result.message, result.success ? "success" : "warning");
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function dispatchSelectionChange(selectedSeatIds) {
   window.dispatchEvent(new CustomEvent("smartcinema:seat-selection-change", {
     detail: { scheduleId: currentScheduleId, selectedSeatIds: [...selectedSeatIds] },
@@ -808,4 +1342,9 @@ window.__seatSelection = {
   getSelectedSeatIds: () => seatMap.getSelectedSeatIds(),
   refreshRecommendation: () => applyAutomaticRecommendation(),
 };
+window.__realtimeSeatClient = realtimeClient;
 window.__store = store;
+
+window.addEventListener("beforeunload", () => {
+  realtimeClient.destroy();
+});

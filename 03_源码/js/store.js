@@ -593,6 +593,23 @@ export function createStore(initialState) {
       return { success: true, enabled: normalizedEnabled };
     },
 
+    /** 保存完整的无障碍与个性化显示设置，并同步到用户记录。 */
+    setAccessibilitySettings(settings) {
+      if (!state.currentUser) {
+        return { success: false, message: "当前未登录" };
+      }
+      const normalizedSettings = {
+        ...(state.currentUser.accessibilityMode || {}),
+        ...settings,
+        enabled: Boolean(settings?.enabled),
+      };
+      state.currentUser.accessibilityMode = normalizedSettings;
+      const storedUser = state.users.find((user) => user.userId === state.currentUser.userId);
+      if (storedUser) storedUser.accessibilityMode = { ...normalizedSettings };
+      persistUsers();
+      return { success: true, settings: { ...normalizedSettings } };
+    },
+
     /** 是否已登录 */
     isLoggedIn() { return state.currentUser !== null; },
 

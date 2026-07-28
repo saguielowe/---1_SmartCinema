@@ -1,10 +1,21 @@
 @echo off
-setlocal
-set "SMARTCINEMA_SOURCE=%~dp003_源码"
+setlocal EnableExtensions
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$listener = Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue; if (-not $listener) { $python = (Get-Command python -ErrorAction Stop).Source; Start-Process -FilePath $python -ArgumentList '-m','http.server','8080','--bind','127.0.0.1' -WorkingDirectory $env:SMARTCINEMA_SOURCE -WindowStyle Hidden }"
+set "SMARTCINEMA_STARTER=%~dp0scripts\start-preview.ps1"
+if not exist "%SMARTCINEMA_STARTER%" (
+  echo [SmartCinema] scripts\start-preview.ps1 was not found.
+  echo [SmartCinema] Keep this launcher in the SmartCinema project root.
+  pause
+  exit /b 1
+)
 
-timeout /t 1 /nobreak >nul
-start "" "http://127.0.0.1:8080/index.html"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%SMARTCINEMA_STARTER%"
+
+if errorlevel 1 (
+  echo.
+  echo [SmartCinema] Preview startup failed. See the message above.
+  pause
+  exit /b 1
+)
+
 endlocal
