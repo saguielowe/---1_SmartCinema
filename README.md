@@ -20,7 +20,7 @@ python -m http.server 8080 --bind 127.0.0.1
 
 清华大学《Web前端技术实训》大作业 1：智能影院选座系统。
 
-当前版本已集成 A/B/C 的 Canvas 选座、智能推荐和订单存储能力；D 已补齐正式账号入口、订单分页筛选、响应式布局和完整无障碍设置，并新增问答式观影顾问、连续拖拽选座动画、WebSocket 多人选座模拟与三套个性化主题，可以跑通“描述需求—确认座位—模拟支付—查看取票码”主流程。
+当前版本已集成 A/B/C 的 Canvas 选座、智能推荐和订单存储能力；D 已补齐正式账号入口、订单分页筛选、响应式布局和完整无障碍设置，并新增问答式观影顾问、连续拖拽选座动画、WebSocket 多人选座模拟与三套个性化主题，可以跑通“描述需求—确认座位—模拟支付—查看取票码”主流程。管理员登录后进入独立的场次运营视图，可按场次查看只读座位图、库存、订单、上座率和估算票房，并通过顶部按钮比较全部场次。
 
 演示账号：
 
@@ -42,11 +42,13 @@ python -m http.server 8080 --bind 127.0.0.1
 - [功能清单](./docs/feature-checklist.md)
 - [用户操作流程](./docs/user-flow.md)
 - [购票与订单约定](./docs/booking-flow.md)
+- [管理员场次运营台](./docs/admin-dashboard.md)
 - [Git 协作约定](./docs/collaboration.md)
 - [各模块进度记录](./docs/contributions/README.md)
 - [AI 协同开发记录](./docs/ai-usage-report.md)
 - [项目架构与 D 模块交接指南](./docs/项目架构与D模块交接指南.md)
 - [功能要求审查报告](./04_测试与验收/功能要求审查报告.md)
+- [管理员后台验收记录](./04_测试与验收/admin-dashboard-acceptance.md)
 - [C 模块接口速查](./C_function_interface.md)
 
 `C_draft.md` 是开发前的历史规划，仅供追溯；当前状态以源码、接口速查和 `docs/contributions/` 为准。
@@ -66,7 +68,7 @@ python -m http.server 8080 --bind 127.0.0.1
 
 提交前建议顺序：
 
-1. 将 D 功能分支合并到集成分支
+1. 将已验收功能分支合并到集成分支
 2. 全组按功能清单做交叉验收
 3. 补全组员信息和实际 AI 使用记录
 4. 完成说明文档、`report.pdf` 和提交压缩包
