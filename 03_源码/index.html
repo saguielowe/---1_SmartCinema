@@ -9,7 +9,8 @@
     />
     <meta name="theme-color" content="#08111f" />
     <title>SmartCinema · 智能影院选座</title>
-    <link rel="stylesheet" href="./css/style.css?v=admin-dashboard-1" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230a8f83'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-size='24' font-family='Arial' font-weight='700' fill='white'%3ESC%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./css/style.css?v=booking-fixes-3" />
   </head>
   <body>
     <a class="skip-link" href="#booking-workspace">跳到购票区</a>
@@ -117,6 +118,7 @@
             <label for="preference">
               <span>座位偏好</span>
               <select id="preference">
+                <option value="none">无偏好</option>
                 <option value="center">中间区域优先</option>
                 <option value="back">后排优先</option>
                 <option value="aisle">靠过道优先</option>
@@ -176,9 +178,6 @@
               <span><i class="seat-dot accessible"></i>无障碍</span>
               <span><i class="seat-dot recommended"></i>推荐</span>
               <span><i class="seat-dot remote"></i>他人正在选择</span>
-              <span class="heat-legend-item" hidden><i class="seat-dot heat-hot"></i>热门</span>
-              <span class="heat-legend-item" hidden><i class="seat-dot heat-medium"></i>一般</span>
-              <span class="heat-legend-item" hidden><i class="seat-dot heat-cold"></i>冷门</span>
               <span><i class="seat-dot reserved"></i>锁定</span>
               <span><i class="seat-dot sold"></i>已售</span>
             </div>
@@ -194,6 +193,12 @@
             <select id="heat-day-select" disabled>
               <option value="6">选择场次后查看</option>
             </select>
+            <div class="heat-legend" aria-label="热度颜色图例" hidden>
+              <span>热度</span>
+              <span class="heat-legend-item" hidden><i class="seat-dot heat-hot"></i>热门</span>
+              <span class="heat-legend-item" hidden><i class="seat-dot heat-medium"></i>一般</span>
+              <span class="heat-legend-item" hidden><i class="seat-dot heat-cold"></i>冷门</span>
+            </div>
           </div>
 
           <div class="screen-wrap" aria-hidden="true">
@@ -211,6 +216,11 @@
             ></canvas>
           </div>
 
+          <div class="multi-select-hint" role="note" aria-label="多座位选择提示">
+            <span class="hint-badge">多选提示</span>
+            <span>选择多个座位时，先把左侧人数调大，再按住 <kbd>Ctrl</kbd> 或 <kbd>Cmd</kbd> 点击座位。</span>
+          </div>
+
           <div class="selection-bar" aria-live="polite">
             <div class="selection-copy">
               <span class="selection-label">当前选择</span>
@@ -221,6 +231,7 @@
             <div class="selection-actions">
               <button id="clear-selection" class="secondary-button" type="button">清空重选</button>
               <button id="submit-selection" class="primary-button" type="button" disabled>确认座位</button>
+              <button id="restart-booking" class="secondary-button" type="button" hidden>重新订票</button>
             </div>
           </div>
         </section>
@@ -344,6 +355,42 @@
           <button id="defer-payment" class="secondary-button" type="button">稍后支付</button>
           <button id="confirm-payment" class="primary-button" type="button">确认支付</button>
         </div>
+      </div>
+    </dialog>
+
+    <dialog id="rating-dialog" class="app-dialog" aria-labelledby="rating-dialog-title">
+      <div class="dialog-card rating-dialog-card">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">VIEWING RATING</p>
+            <h2 id="rating-dialog-title">观影体验评分</h2>
+          </div>
+          <button class="dialog-close icon-button" type="button" data-close-dialog="rating-dialog" aria-label="关闭观影评分">×</button>
+        </div>
+        <div id="rating-summary" class="payment-summary rating-summary"></div>
+        <form id="rating-form" class="rating-form">
+          <label for="rating-value">
+            <span>观众手动评分</span>
+            <select id="rating-value" name="ratingValue" required>
+              <option value="5">5 分 · 很满意</option>
+              <option value="4">4 分 · 满意</option>
+              <option value="3">3 分 · 一般</option>
+              <option value="2">2 分 · 不太满意</option>
+              <option value="1">1 分 · 不满意</option>
+            </select>
+          </label>
+          <label for="rating-comment">
+            <span>简短原因</span>
+            <textarea id="rating-comment" name="comment" rows="3" maxlength="120" placeholder="例如：视线清楚，旁边空位多。"></textarea>
+          </label>
+          <p class="panel-note">
+            综合结果 = 系统观影体验评分 70% + 观众手动评分折算值 30%。
+          </p>
+          <div class="dialog-actions">
+            <button class="secondary-button" type="button" data-close-dialog="rating-dialog">取消</button>
+            <button class="primary-button" type="submit">保存评分</button>
+          </div>
+        </form>
       </div>
     </dialog>
 
@@ -490,6 +537,6 @@
 
     <div id="app-announcer" class="visually-hidden" aria-live="assertive" aria-atomic="true"></div>
 
-    <script type="module" src="./js/app.js?v=admin-dashboard-1"></script>
+    <script type="module" src="./js/app.js?v=booking-fixes-10"></script>
   </body>
 </html>

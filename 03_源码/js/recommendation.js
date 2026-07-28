@@ -193,14 +193,25 @@ function normalizeInput(input) {
     hasSenior: ages.some((age) => age > 60),
     needAccessibility:
       Boolean(input.needAccessibility) || Boolean(input.preferences?.accessibilityNeeded),
+    preferenceMode: normalizePreferenceMode(input.preferenceMode, input.preferences),
     preferences: {
-      preferCenter: input.preferences?.preferCenter ?? true,
-      preferBack: input.preferences?.preferBack ?? ticketType === "family",
+      preferCenter: input.preferences?.preferCenter ?? false,
+      preferBack: input.preferences?.preferBack ?? false,
       preferAisle: input.preferences?.preferAisle ?? false,
       accessibilityNeeded: input.preferences?.accessibilityNeeded ?? false,
     },
     warnings,
   };
+}
+
+function normalizePreferenceMode(preferenceMode, preferences = {}) {
+  if (["center", "back", "aisle", "none"].includes(preferenceMode)) {
+    return preferenceMode;
+  }
+  if (preferences.preferAisle) return "aisle";
+  if (preferences.preferBack) return "back";
+  if (preferences.preferCenter) return "center";
+  return "none";
 }
 
 function normalizePassengers(input) {
@@ -442,7 +453,7 @@ function scoreSeatBlock({ block, allSeats, seatState, input, hall }) {
   const distance = clamp01(1 - Math.abs(rowRatio - getTargetRowRatio(input)) / 0.55);
   const spacing = calculateSpacingScore(block, allSeats, seatState, input.selectedScheduleId);
   const preference = calculatePreferenceScore(block, input, centerRatio, rowRatio);
-  const scoreValue = Math.round(clamp(angle * 35 + distance * 35 + spacing * 20 + preference * 10, 0, 100));
+  const scoreValue = Math.round(clamp(angle * 25 + distance * 25 + spacing * 15 + preference * 35, 0, 100));
   const score = getScoreGrade(scoreValue);
 
   return {
@@ -494,30 +505,35 @@ function calculateSpacingScore(block, allSeats, seatState, selectedScheduleId) {
 }
 
 function calculatePreferenceScore(block, input, centerRatio, rowRatio) {
+  const preferenceMode = input.preferenceMode || "none";
+  const aisleRatio = block.filter((seat) => touchesAisle(seat)).length / Math.max(1, block.length);
+
+  if (preferenceMode === "center") {
+    return clamp01(0.15 + (1 - Math.abs(centerRatio - 0.5) * 2) * 0.85);
+  }
+
+  if (preferenceMode === "back") {
+    return rowRatio >= 0.45 && rowRatio <= 0.86
+      ? clamp01(0.3 + rowRatio * 0.7)
+      : 0.18;
+  }
+
+  if (preferenceMode === "aisle") {
+    return clamp01(0.12 + aisleRatio * 0.88);
+  }
+
   let score = 0.55;
 
-  if (input.preferences.preferCenter) {
-    score += (1 - Math.abs(centerRatio - 0.5) * 2) * 0.2;
-  }
-
-  if (input.preferences.preferBack) {
-    score += rowRatio >= 0.45 && rowRatio <= 0.82 ? 0.15 : -0.08;
-  }
-
-  if (input.preferences.preferAisle) {
-    score += block.some((seat) => touchesAisle(seat)) ? 0.1 : -0.04;
-  }
-
   if (input.ticketType === "couple" && block.length === 2) {
-    score += 0.12;
+    score += 0.08;
   }
 
   if (input.ticketType === "family" && rowRatio >= 0.42) {
-    score += 0.12;
+    score += 0.08;
   }
 
   if (input.ticketType === "group" && block.length === input.peopleCount) {
-    score += 0.15;
+    score += 0.1;
   }
 
   return clamp01(score);
@@ -618,7 +634,7 @@ function formatDebugReport({ input, schedule, hall, seatState, result, candidate
   lines.push(`影厅: ${hall?.hallName ?? "未指定"} (${hall?.hallId ?? "unknown"})`);
   lines.push(`票种/人数: ${input.ticketTypeLabel} / ${input.peopleCount} 人`);
   lines.push(`年龄: ${input.ages.length ? input.ages.join(", ") : "未填写，按成年人补齐"}`);
-  lines.push(`偏好: ${formatPreferences(input.preferences)}`);
+  lines.push(`偏好: ${formatPreferences(input.preferences, input.preferenceMode)}`);
   lines.push("");
   lines.push("座位状态概览");
   lines.push("----------------");
@@ -693,11 +709,11 @@ function formatSeatStateSummary(summary) {
   return `total=${summary.total}, available=${summary.available}, selected=${summary.selected}, reserved=${summary.reserved}, sold=${summary.sold}`;
 }
 
-function formatPreferences(preferences) {
+function formatPreferences(preferences, preferenceMode = "none") {
   const names = [];
-  if (preferences.preferCenter) names.push("中区");
-  if (preferences.preferBack) names.push("中后排");
-  if (preferences.preferAisle) names.push("靠过道");
+  if (preferenceMode === "center" || preferences.preferCenter) names.push("中区");
+  if (preferenceMode === "back" || preferences.preferBack) names.push("中后排");
+  if (preferenceMode === "aisle" || preferences.preferAisle) names.push("靠过道");
   if (preferences.accessibilityNeeded) names.push("无障碍");
   return names.length ? names.join("、") : "无";
 }
@@ -722,7 +738,8 @@ function isSeatAvailable(seatId, seatState, selectedScheduleId) {
 }
 
 function getTargetRowRatio(input) {
-  if (input.ticketType === "family" || input.preferences.preferBack) return 0.66;
+  if (input.preferenceMode === "back") return 0.72;
+  if (input.ticketType === "family") return 0.6;
   if (input.ticketType === "group") return input.hasSenior ? 0.52 : 0.62;
   if (input.hasSenior && input.hasTeen) return 0.5;
   if (input.hasSenior) return 0.45;

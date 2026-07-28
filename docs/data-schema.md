@@ -142,6 +142,7 @@
   ages: [21, 22],
   selectedMovieId: "m001",
   selectedScheduleId: "s001",
+  preferenceMode: "none", // none | center | back | aisle
   needAccessibility: false,
   passengers: [
     { name: "Alice", age: 21 },
@@ -164,6 +165,7 @@
 - `group`：团体票
 - 可以通过 `passengers` 自动判断是否有儿童或老人
 - 建议把“儿童/老人判断”放在年龄规则里，而不是额外拆出很多票种
+- `preferenceMode: "none"` 表示无座位偏好，不默认强推中区；选择 `center/back/aisle` 时该偏好优先于情侣、家庭等票种倾向
 
 如果做表单简化版，也至少要保留 `ticketType + peopleCount + ages`。
 
@@ -204,6 +206,12 @@
   status: "booked", // booked | cancelled | purchased | refunded
   paymentStatus: "pending", // pending | paid | closed
   paymentMethod: "mock", // mock
+  viewerRating: {
+    ratingValue: 4.5,
+    comment: "视线清楚，旁边空位多",
+    createdAt: 1780003600000,
+    updatedAt: 1780003600000
+  },
   createdAt: 1780000000000,
   updatedAt: 1780000005000,
   expiresAt: 1780000900000
@@ -215,6 +223,7 @@
 - `booked` 对应“已预订 / 已锁票”
 - `purchased` 对应“假支付成功后完成购票”
 - `expiresAt` 用于预订超时自动释放座位
+- `viewerRating` 为观影后观众手动评分，仅已支付订单的所属观众可提交；`ratingValue` 为 1 到 5 分，前端综合评分时折算为 0 到 100 分
 - 不需要接真实支付，做一个假支付确认页或弹窗即可
 
 ## 热度 `heatMapData`
