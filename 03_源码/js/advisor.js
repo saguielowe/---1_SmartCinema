@@ -35,7 +35,9 @@ export function parseAdvisorRequest(question) {
     ? "aisle"
     : wantsQuiet || wantsBack
       ? "back"
-      : "center";
+      : wantsCenter
+        ? "center"
+        : "none";
 
   return {
     peopleCount: ticketType === "couple" ? 2 : normalizedPeopleCount,

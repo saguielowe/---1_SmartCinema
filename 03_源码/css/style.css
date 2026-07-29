@@ -667,6 +667,27 @@ h2 {
   background: #22c55e;
 }
 
+.heat-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 10px;
+  border-left: 1px solid #d7e2ea;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.heat-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.heat-legend > span:first-child {
+  color: #728195;
+  font-weight: 800;
+}
+
 .heat-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -811,6 +832,44 @@ h2 {
   min-width: 560px;
 }
 
+.multi-select-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(10, 143, 131, 0.28);
+  border-radius: 12px;
+  background: rgba(10, 143, 131, 0.08);
+  color: #254255;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.hint-badge {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 0.64rem;
+  font-weight: 850;
+}
+
+.multi-select-hint kbd {
+  display: inline-grid;
+  min-width: 30px;
+  min-height: 22px;
+  place-items: center;
+  padding: 1px 6px;
+  border: 1px solid #b8c8d3;
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--accent-deep);
+  font: 800 0.72rem ui-monospace, "Cascadia Code", monospace;
+}
+
 .selection-bar {
   display: flex;
   align-items: center;
@@ -882,7 +941,8 @@ body.is-admin-view #seat-canvas {
 }
 
 body.is-admin-view .selection-actions,
-body.is-admin-view .hover-seat {
+body.is-admin-view .hover-seat,
+body.is-admin-view .multi-select-hint {
   display: none;
 }
 
@@ -1268,6 +1328,33 @@ body.is-admin-view .selection-bar {
   font-weight: 650;
 }
 
+.order-rating-summary {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #dfe8ef;
+  border-radius: 10px;
+  background: #f7fafc;
+  color: #34465a;
+  font-size: 0.68rem;
+}
+
+.order-rating-summary span {
+  display: grid;
+  gap: 2px;
+}
+
+.order-rating-summary b {
+  color: #7f8fa0;
+  font-size: 0.58rem;
+  font-weight: 700;
+}
+
+.order-rating-comment {
+  color: var(--accent-deep);
+}
+
 .pickup-code {
   color: var(--accent-deep);
   font-weight: 900;
@@ -1351,7 +1438,7 @@ body.is-admin-view .selection-bar {
 }
 
 .admin-comparison-summary {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 16px 0;
 }
 
@@ -1403,6 +1490,13 @@ body.is-admin-view .selection-bar {
 .admin-comparison-table td:first-child span {
   color: var(--muted);
   font-size: 0.65rem;
+}
+
+.admin-comparison-table .rating-count {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.61rem;
 }
 
 .admin-comparison-table .occupancy-value {
@@ -1502,6 +1596,40 @@ body.is-admin-view .selection-bar {
 
 .payment-summary strong {
   color: var(--text);
+}
+
+.rating-form {
+  display: grid;
+  gap: 12px;
+}
+
+.rating-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.rating-form select,
+.rating-form textarea {
+  width: 100%;
+  border: 1px solid #dce5ec;
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--text);
+  font: inherit;
+}
+
+.rating-form select {
+  min-height: 40px;
+  padding: 0 12px;
+}
+
+.rating-form textarea {
+  resize: vertical;
+  min-height: 84px;
+  padding: 10px 12px;
 }
 
 .dialog-actions {
@@ -1845,6 +1973,7 @@ body.is-high-contrast::before {
 
 body.is-high-contrast .panel,
 body.is-high-contrast .selection-bar,
+body.is-high-contrast .multi-select-hint,
 body.is-high-contrast .checkbox-group,
 body.is-high-contrast .order-card,
 body.is-high-contrast .dialog-card,
@@ -1859,6 +1988,14 @@ body.is-high-contrast :where(input, select, textarea) {
 
 body.is-high-contrast .panel {
   box-shadow: 0 0 0 3px #ffffff;
+}
+
+body.is-high-contrast .multi-select-hint kbd {
+  border-color: #000000;
+}
+
+body.is-high-contrast .heat-legend {
+  border-left-color: #000000;
 }
 
 body.is-high-contrast :where(.primary-button, .heat-toggle[aria-pressed="true"]) {
@@ -2000,6 +2137,10 @@ html.reduce-motion *::after {
 }
 
 @media (max-width: 900px) {
+  .admin-comparison-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .app-shell {
     width: min(100vw - 24px, 1560px);
     padding-top: 18px;
@@ -2108,6 +2249,11 @@ html.reduce-motion *::after {
     flex-direction: column;
   }
 
+  .multi-select-hint {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .legend {
     max-width: none;
     justify-content: flex-start;
@@ -2115,6 +2261,12 @@ html.reduce-motion *::after {
 
   .heat-toolbar {
     justify-content: flex-start;
+  }
+
+  .heat-legend {
+    width: 100%;
+    padding-left: 0;
+    border-left: 0;
   }
 
   .heat-toolbar .inventory-summary {

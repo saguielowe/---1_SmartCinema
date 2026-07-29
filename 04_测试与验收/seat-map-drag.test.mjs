@@ -72,6 +72,18 @@ function createPointerEvent(type, x, y, coalescedEvents = []) {
   return event;
 }
 
+function createClickEvent(x, y) {
+  const event = new Event("click", { cancelable: true });
+  Object.defineProperties(event, {
+    clientX: { value: x },
+    clientY: { value: y },
+    ctrlKey: { value: false },
+    metaKey: { value: false },
+    pointerType: { value: "mouse" },
+  });
+  return event;
+}
+
 function createFiveSeatMap({
   selectedSeatIds = [],
   highlightedSeatIds = [],
@@ -153,6 +165,20 @@ function fastDragAcrossRow(canvas, { curveDepth = 0, endY } = {}) {
     seatMap.getSelectedSeatIds(),
     ["A-1", "A-2", "A-3", "A-4", "A-5"],
     "第一次手动拖动应替换自动推荐并形成连续区间",
+  );
+  seatMap.destroy();
+}
+
+{
+  const { canvas, seatMap } = createFiveSeatMap({
+    selectedSeatIds: ["A-1", "A-3", "A-5"],
+    highlightedSeatIds: ["A-1", "A-3", "A-5"],
+  });
+  canvas.dispatchEvent(createClickEvent(150, 72));
+  assert.deepEqual(
+    seatMap.getSelectedSeatIds(),
+    ["A-3"],
+    "第一次手动单击应整体替换自动推荐，而不是只取消推荐中的一个座位",
   );
   seatMap.destroy();
 }

@@ -786,6 +786,46 @@ export function createStore(initialState) {
     },
 
     /**
+     * 提交或更新观众观影后的手动评分。
+     *
+     * @param {string} orderId - 订单 ID
+     * @param {object} params - 评分数据
+     * @param {number|string} params.ratingValue - 观众评分，1 到 5 星
+     * @param {string} [params.comment] - 可选短评
+     * @returns {{ success: boolean, message: string, order?: object }}
+     */
+    submitViewingRating(orderId, { ratingValue, comment = "" } = {}) {
+      const order = state.orders.find((o) => o.orderId === orderId);
+      if (!order) {
+        return { success: false, message: "订单不存在" };
+      }
+      if (order.status !== "purchased") {
+        return { success: false, message: "仅已支付订单可提交观影体验评分" };
+      }
+      if (!state.currentUser || state.currentUser.userId !== order.userId) {
+        return { success: false, message: "仅订单观众本人可提交观影体验评分" };
+      }
+
+      const normalizedRating = Number(ratingValue);
+      if (!Number.isFinite(normalizedRating) || normalizedRating < 1 || normalizedRating > 5) {
+        return { success: false, message: "观众评分需为 1 到 5 分" };
+      }
+
+      const now = Date.now();
+      order.viewerRating = {
+        ratingValue: Math.round(normalizedRating * 10) / 10,
+        comment: String(comment || "").trim().slice(0, 120),
+        createdAt: order.viewerRating?.createdAt || now,
+        updatedAt: now,
+      };
+      order.updatedAt = now;
+      persistOrders();
+
+      console.log("[Store] 观影评分已提交:", orderId, order.viewerRating.ratingValue);
+      return { success: true, message: "观影体验评分已保存", order };
+    },
+
+    /**
      * 查询订单列表。
      * 普通用户返回自己的订单，管理员返回全部。
      *

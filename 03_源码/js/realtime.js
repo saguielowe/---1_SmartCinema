@@ -14,13 +14,14 @@ export function createRealtimeSeatClient({
   let reconnectTimer = 0;
   let activeScheduleId = "";
   let destroyed = false;
+  let websocketUnavailable = false;
 
   channel?.addEventListener("message", (event) => {
     applyRealtimeMessage(event.data, { source: "broadcast" });
   });
 
   function connect() {
-    if (destroyed || !("WebSocket" in window)) {
+    if (destroyed || websocketUnavailable || !("WebSocket" in window)) {
       updateStatus();
       return;
     }
@@ -54,12 +55,13 @@ export function createRealtimeSeatClient({
     });
 
     socket.addEventListener("error", () => {
+      websocketUnavailable = true;
       socket?.close();
     });
   }
 
   function scheduleReconnect() {
-    if (destroyed || reconnectTimer) return;
+    if (destroyed || websocketUnavailable || reconnectTimer) return;
     reconnectTimer = window.setTimeout(() => {
       reconnectTimer = 0;
       connect();

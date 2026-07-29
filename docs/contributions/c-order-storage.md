@@ -28,10 +28,11 @@
 - `login(username, password)`：支持 user/admin 角色，LS 持久化会话
 - `getCurrentUser()` / `isLoggedIn()` / `isAdmin()` / `logout()`
 
-### 订单管理（类别 D，8 项）
+### 订单管理（类别 D，9 项）
 - `createOrder`：创建订单 + 锁票（15 分钟超时），校验登录 + 座位可用 + 场次存在
 - `payOrder`：模拟支付，booked→purchased，reserved→sold，热度 +0.05
 - `cancelOrder` / `refundOrder`：取消/退票，释放座位，热度 -0.02
+- `submitViewingRating(orderId, { ratingValue, comment })`：已支付订单提交或更新观众观影后手动评分
 - `getOrders(filter?)`：普通用户只看自己，管理员全量，按 status/scheduleId 筛选
 - `getOrderById(orderId)`
 - 锁票超时自动释放 + 页面刷新后定时器恢复

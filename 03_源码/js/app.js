@@ -1,9 +1,9 @@
-import { debugRecommendation } from "./recommendation.js?v=guest-1";
-import { store } from "./store.js?v=feature-suite-2";
-import { createSeatMap } from "./seat-map.js?v=feature-suite-2";
-import { createRealtimeSeatClient } from "./realtime.js?v=feature-suite-2";
-import { parseAdvisorRequest } from "./advisor.js?v=feature-suite-2";
-import { calculateComparisonSummary, calculateScheduleMetrics } from "./admin-dashboard.js?v=admin-dashboard-1";
+import { debugRecommendation, evaluateViewingExperience } from "./recommendation.js?v=booking-fixes-1";
+import { store } from "./store.js?v=manual-rating-1";
+import { createSeatMap } from "./seat-map.js?v=booking-fixes-7";
+import { createRealtimeSeatClient } from "./realtime.js?v=booking-fixes-1";
+import { parseAdvisorRequest } from "./advisor.js?v=booking-fixes-1";
+import { calculateComparisonSummary, calculateScheduleMetrics } from "./admin-dashboard.js?v=admin-satisfaction-1";
 
 store.initStore();
 
@@ -22,6 +22,7 @@ const heatToggleButton = document.querySelector("#heat-toggle");
 const currentInventory = document.querySelector("#current-inventory");
 const realtimeStatus = document.querySelector("#realtime-status");
 const realtimeStatusText = realtimeStatus?.querySelector("span");
+const heatLegend = document.querySelector(".heat-legend");
 const heatLegendItems = document.querySelectorAll(".heat-legend-item");
 const accessibilityModeButton = document.querySelector("#accessibility-mode-button");
 const userSummary = document.querySelector("#user-summary");
@@ -38,8 +39,10 @@ const adminComparisonSummary = document.querySelector("#admin-comparison-summary
 const adminComparisonBody = document.querySelector("#admin-comparison-body");
 const seatMapTitle = document.querySelector("#seat-map-title");
 const seatMapNote = document.querySelector("#seat-map-note");
+const seatPanelKicker = document.querySelector("#seat-panel-kicker");
 const ordersTitle = document.querySelector("#orders-title");
 const ordersNote = document.querySelector("#orders-note");
+const ordersPanelKicker = document.querySelector("#orders-panel-kicker");
 const progressSteps = [
   document.querySelector("#progress-step-1"),
   document.querySelector("#progress-step-2"),
@@ -55,6 +58,7 @@ const selectionFeedback = document.querySelector("#selection-feedback");
 const hoverSeatText = document.querySelector("#hover-seat");
 const clearSelectionButton = document.querySelector("#clear-selection");
 const submitSelectionButton = document.querySelector("#submit-selection");
+const restartBookingButton = document.querySelector("#restart-booking");
 const orderList = document.querySelector("#order-list");
 const orderStatusFilter = document.querySelector("#order-status-filter");
 const orderCount = document.querySelector("#order-count");
@@ -67,6 +71,11 @@ const paymentDialog = document.querySelector("#payment-dialog");
 const paymentSummary = document.querySelector("#payment-summary");
 const deferPaymentButton = document.querySelector("#defer-payment");
 const confirmPaymentButton = document.querySelector("#confirm-payment");
+const ratingDialog = document.querySelector("#rating-dialog");
+const ratingForm = document.querySelector("#rating-form");
+const ratingSummary = document.querySelector("#rating-summary");
+const ratingValueInput = document.querySelector("#rating-value");
+const ratingCommentInput = document.querySelector("#rating-comment");
 const authDialog = document.querySelector("#auth-dialog");
 const loginTab = document.querySelector("#login-tab");
 const registerTab = document.querySelector("#register-tab");
@@ -107,6 +116,10 @@ let accessibilitySettings = readAccessibilitySettings();
 let isAccessibilityMode = accessibilitySettings.enabled;
 let isManualSelection = false;
 let pendingPaymentOrder = null;
+let pendingRatingOrderId = "";
+let displayedOrderId = "";
+let displayedOrderSeatIds = [];
+let displayedOrderStatus = "";
 let isHeatVisible = false;
 let currentOrderPage = 1;
 let currentProgressStep = 1;
@@ -137,7 +150,7 @@ const seatMap = createSeatMap(seatCanvas, {
   onSeatFocus: renderFocusedSeat,
 });
 
-const realtimeClient = createRealtimeSeatClient({
+const realtimeClient = createSafeRealtimeSeatClient({
   onStatus: ({ state, label }) => {
     if (realtimeStatus) realtimeStatus.dataset.state = state;
     if (realtimeStatusText) realtimeStatusText.textContent = label;
@@ -162,7 +175,7 @@ renderRoleView();
 renderSelection([]);
 renderRecommendation();
 renderUserSummary();
-renderOrders();
+safelyRenderOrders();
 renderFocusedSeat(null);
 
 ticketForm?.addEventListener("submit", (event) => event.preventDefault());
@@ -172,7 +185,17 @@ scheduleSelect?.addEventListener("change", () => {
   setProgressStep(2);
   populateHeatWeekOptions(store.getScheduleById(currentScheduleId)?.date);
   seatMap.resetFocus();
-  applyAutomaticRecommendation({ message: "已根据场次和购票条件自动选好座位，可直接确认。" });
+  loadSelectedScheduleSeatMap();
+  try {
+    applyAutomaticRecommendation({ message: "已根据场次和购票条件自动选好座位，可直接确认。" });
+  } catch (error) {
+    console.error("[Recommendation] 场次推荐失败，已保留可手动选座状态。", error);
+    activeRecommendationSeatIds = [];
+    currentRecommendationReport = null;
+    renderRecommendation();
+    renderSelection(seatMap.getSelectedSeatIds());
+    setFeedback("已加载场次座位图；自动推荐暂时失败，可直接手动选座。", "warning");
+  }
 });
 adminScheduleSelect?.addEventListener("change", () => selectAdminSchedule(adminScheduleSelect.value));
 adminComparisonButton?.addEventListener("click", openAdminComparison);
@@ -234,11 +257,13 @@ document.querySelectorAll("[data-close-dialog]").forEach((button) => {
 });
 clearSelectionButton?.addEventListener("click", () => {
   isManualSelection = true;
+  clearDisplayedOrderSelection();
   seatMap.update({ highlightedSeatIds: [] });
   seatMap.clearSelection();
   renderSelection([]);
   setFeedback("推荐座位已清空；现在可用点击或 Ctrl/Cmd + 点击自行多选。", "info");
 });
+restartBookingButton?.addEventListener("click", resetBookingFlow);
 
 submitSelectionButton?.addEventListener("click", () => {
   const selectedSeatIds = seatMap.getSelectedSeatIds();
@@ -250,7 +275,7 @@ submitSelectionButton?.addEventListener("click", () => {
     seatIds: [...selectedSeatIds],
     ticketType: ticketTypeSelect?.value || "single",
     peopleCount,
-    preference: preferenceSelect?.value || "center",
+    preference: preferenceSelect?.value || "none",
   };
   const result = store.createOrder(detail);
   if (!result.success) {
@@ -259,6 +284,7 @@ submitSelectionButton?.addEventListener("click", () => {
   }
 
   pendingPaymentOrder = result.order;
+  setDisplayedOrderSelection(result.order);
   setProgressStep(3);
   window.dispatchEvent(new CustomEvent("smartcinema:seat-selection-submit", {
     detail: { ...detail, selectedSeatIds: [...selectedSeatIds], orderId: result.order.orderId },
@@ -275,11 +301,16 @@ confirmPaymentButton?.addEventListener("click", () => {
     return;
   }
   const paidOrderId = pendingPaymentOrder.orderId;
+  const paidSeatIds = getOrderSeatIds(pendingPaymentOrder);
   pendingPaymentOrder = null;
   paymentDialog?.close();
-  applyAutomaticRecommendation({
-    message: `订单 ${paidOrderId} 支付成功，座位已更新为已售。请前往右侧订单中心查看。`,
-  });
+  setDisplayedOrderSelection({ orderId: paidOrderId, seatIds: paidSeatIds, status: "purchased" });
+  redrawCurrentScheduleAfterOrder();
+  if (restartBookingButton) restartBookingButton.hidden = false;
+  setFeedback(
+    `订单 ${paidOrderId} 支付成功，座位已更新为已售；你的座位仍以“已选”显示。可在订单中心评分，或重新订票。`,
+    "success",
+  );
 });
 
 deferPaymentButton?.addEventListener("click", () => {
@@ -300,6 +331,13 @@ deferPaymentButton?.addEventListener("click", () => {
 paymentDialog?.addEventListener("cancel", (event) => {
   event.preventDefault();
   deferPaymentButton?.click();
+});
+ratingForm?.addEventListener("submit", handleViewingRatingSubmit);
+ratingDialog?.addEventListener("cancel", () => {
+  pendingRatingOrderId = "";
+});
+ratingDialog?.addEventListener("close", () => {
+  pendingRatingOrderId = "";
 });
 
 function refreshFromConditions() {
@@ -557,7 +595,7 @@ function applyAccessibilityModeState({ wasEnabled = false, updateSeatMap = true 
     if (preferenceSelect) preferenceSelect.value = "back";
     if (needAccessibilityInput) needAccessibilityInput.checked = true;
   } else if (wasEnabled) {
-    if (preferenceSelect?.value === "back") preferenceSelect.value = "center";
+    if (preferenceSelect?.value === "back") preferenceSelect.value = "none";
     if (needAccessibilityInput) needAccessibilityInput.checked = false;
   }
 
@@ -733,12 +771,14 @@ function renderRoleView() {
     );
   }
   if (seatMapTitle) seatMapTitle.textContent = isAdmin ? "当前场次座位状态" : "确认你的座位";
+  if (seatPanelKicker) seatPanelKicker.textContent = isAdmin ? "SEAT STATUS" : "STEP 02";
   if (seatMapNote) {
     seatMapNote.textContent = isAdmin
       ? "查看已售、锁定与可用座位分布；管理员模式不会占用或选择座位。"
       : "接受推荐，或清空后手动改选。键盘可用方向键移动，Enter / 空格选择座位。";
   }
   if (ordersTitle) ordersTitle.textContent = isAdmin ? "当前场次订单" : "订单中心";
+  if (ordersPanelKicker) ordersPanelKicker.textContent = isAdmin ? "SHOWTIME ORDERS" : "STEP 03";
   if (ordersNote) {
     ordersNote.textContent = isAdmin
       ? "仅显示左侧所选场次的订单，可按状态筛选并处理取消或退票。"
@@ -813,10 +853,14 @@ function renderAdminSchedule() {
   const metrics = getAdminScheduleMetrics(schedule);
 
   if (adminScheduleDetails) {
+    const hallTypeLabel = formatHallType(hall.hallType);
+    const hallLabel = hallTypeLabel === hall.hallName
+      ? hall.hallName
+      : `${hall.hallName} · ${hallTypeLabel}`;
     adminScheduleDetails.innerHTML = `
       <strong>${escapeHtml(movie?.title || "未知影片")}</strong>
       <span>${escapeHtml(`${schedule.date} ${schedule.startTime}–${schedule.endTime}`)}</span>
-      <span>${escapeHtml(`${hall.hallName} · ${formatHallType(hall.hallType)} · ¥${schedule.price}/座`)}</span>
+      <span>${escapeHtml(`${hallLabel} · ¥${schedule.price}/座`)}</span>
     `;
   }
   if (adminScheduleMetrics) {
@@ -825,6 +869,7 @@ function renderAdminSchedule() {
       ${renderAdminMetric("可用座位", metrics.available, `${metrics.reserved} 个锁定`)}
       ${renderAdminMetric("场次订单", metrics.orderCount, "含全部状态")}
       ${renderAdminMetric("估算票房", formatCurrency(metrics.estimatedRevenue), "按已售座位计算")}
+      ${renderAdminMetric("观众满意度", formatViewerSatisfaction(metrics), `${metrics.viewerRatingCount} 份有效评分`)}
     `;
   }
 }
@@ -847,6 +892,7 @@ function openAdminComparison() {
       ${renderAdminMetric("综合上座率", formatPercent(summary.occupancyRate), `${summary.sold}/${summary.capacity} 已售`)}
       ${renderAdminMetric("全部订单", summary.orderCount, `${summary.reserved} 个座位锁定中`)}
       ${renderAdminMetric("估算总票房", formatCurrency(summary.estimatedRevenue), "按当前已售座位计算")}
+      ${renderAdminMetric("总体满意度", formatViewerSatisfaction(summary), `${summary.viewerRatingCount} 份有效评分`)}
     `;
   }
   if (adminComparisonBody) {
@@ -857,6 +903,7 @@ function openAdminComparison() {
         <td>${metrics.sold} / ${metrics.capacity}</td>
         <td><span class="occupancy-value">${formatPercent(metrics.occupancyRate)}</span><i><b style="width:${Math.round(metrics.occupancyRate * 100)}%"></b></i></td>
         <td>${metrics.orderCount}</td>
+        <td>${formatViewerSatisfaction(metrics)}<small class="rating-count">${metrics.viewerRatingCount} 份</small></td>
         <td>${formatCurrency(metrics.estimatedRevenue)}</td>
         <td><button type="button" data-admin-schedule-id="${escapeHtml(schedule.scheduleId)}">查看</button></td>
       </tr>
@@ -867,6 +914,12 @@ function openAdminComparison() {
 
 function formatPercent(value) {
   return `${(Number(value || 0) * 100).toFixed(1)}%`;
+}
+
+function formatViewerSatisfaction(metrics) {
+  return Number.isFinite(metrics?.viewerRatingAverage)
+    ? `${metrics.viewerRatingAverage.toFixed(1)} / 5`
+    : "暂无";
 }
 
 function formatCurrency(value) {
@@ -905,6 +958,7 @@ function toggleHeatVisibility() {
   isHeatVisible = !isHeatVisible;
   heatToggleButton?.setAttribute("aria-pressed", String(isHeatVisible));
   if (heatToggleButton) heatToggleButton.textContent = isHeatVisible ? "隐藏热度" : "显示热度";
+  if (heatLegend) heatLegend.hidden = !isHeatVisible;
   heatLegendItems.forEach((item) => { item.hidden = !isHeatVisible; });
   if (heatDaySelect) heatDaySelect.disabled = !isHeatVisible || !currentScheduleId;
   seatMap.update({ showHeat: isHeatVisible });
@@ -927,7 +981,31 @@ function refreshHeatForSelectedDay() {
   setFeedback(`已切换到 ${heatDaySelect.selectedOptions[0]?.textContent || "所选日期"} 的热度分布。`, "info");
 }
 
+function loadSelectedScheduleSeatMap() {
+  const schedule = store.getScheduleById(currentScheduleId);
+  const hall = schedule ? store.getHallById(schedule.hallId) : null;
+  const seatState = currentScheduleId ? store.getSeatStateBySchedule(currentScheduleId) : [];
+  const seatMeta = hall ? buildSeatMetadata(hall) : [];
+  currentHeatMap = hall ? calculateDemandHeatMap(hall, seatState, seatMeta) : [];
+  isApplyingAutomaticSelection = true;
+  seatMap.update({
+    hall,
+    seatState,
+    heatMap: currentHeatMap,
+    highlightedSeatIds: [],
+    selectedSeatIds: [],
+    displaySelectedSeatIds: [],
+    maxSelected: getPeopleCount(),
+  });
+  isApplyingAutomaticSelection = false;
+  isManualSelection = false;
+  renderSelection([]);
+  renderCurrentInventory();
+  renderFocusedSeat(null);
+}
+
 function applyAutomaticRecommendation({ message = "" } = {}) {
+  clearDisplayedOrderSelection({ updateSeatMap: false });
   const schedule = store.getScheduleById(currentScheduleId);
   const hall = schedule ? store.getHallById(schedule.hallId) : null;
   const seatState = currentScheduleId ? store.getSeatStateBySchedule(currentScheduleId) : [];
@@ -942,7 +1020,7 @@ function applyAutomaticRecommendation({ message = "" } = {}) {
     activeRecommendationSeatIds = [];
     currentHeatMap = [];
     currentRecommendationReport = null;
-    seatMap.update({ hall: null, seatState: [], heatMap: [], highlightedSeatIds: [], selectedSeatIds: [] });
+    seatMap.update({ hall: null, seatState: [], heatMap: [], highlightedSeatIds: [], selectedSeatIds: [], displaySelectedSeatIds: [] });
     renderSelection([]);
     renderRecommendation();
     renderOrders();
@@ -967,6 +1045,7 @@ function applyAutomaticRecommendation({ message = "" } = {}) {
     heatMap: currentHeatMap,
     highlightedSeatIds: activeRecommendationSeatIds,
     selectedSeatIds: activeRecommendationSeatIds,
+    displaySelectedSeatIds: [],
     maxSelected: getPeopleCount(),
   });
   isApplyingAutomaticSelection = false;
@@ -1119,14 +1198,17 @@ function findBestSeatGroup({ hall, seatState, heatMap, seatMeta, anchorSeatId = 
         (sum, seat) => sum + (heatBySeatId.get(seat.seatId) || 0),
         0,
       ) / count;
-      const preference = preferenceSelect?.value || "center";
+      const preference = preferenceSelect?.value || "none";
       const rowRatio = candidate[0].rowIndex / Math.max(1, (hall.rows?.length || 1) - 1);
       const aisleRatio = candidate.filter((seat) => seat.isAisle).length / count;
+      const centerScore = 1 - Math.abs(candidate.reduce((sum, seat) => sum + seat.columnPosition, 0) / count - 0.5) * 2;
       const score = preference === "back"
         ? averageHeat * 0.68 + rowRatio * 0.32
         : preference === "aisle"
-          ? averageHeat * 0.68 + aisleRatio * 0.32
-          : averageHeat;
+          ? averageHeat * 0.45 + aisleRatio * 0.55
+          : preference === "center"
+            ? averageHeat * 0.55 + centerScore * 0.45
+            : averageHeat;
 
       if (!best || score > best.score) {
         best = { score, seatIds: candidate.map((seat) => seat.seatId) };
@@ -1150,7 +1232,7 @@ function findBestSeatGroup({ hall, seatState, heatMap, seatMeta, anchorSeatId = 
   }
 
   if (!best) {
-    const preference = preferenceSelect?.value || "center";
+    const preference = preferenceSelect?.value || "none";
     return [...available]
       .map((seatId) => metaBySeatId.get(seatId))
       .filter(Boolean)
@@ -1159,8 +1241,20 @@ function findBestSeatGroup({ hall, seatState, heatMap, seatMeta, anchorSeatId = 
         const heatB = heatBySeatId.get(b.seatId) || 0;
         const rowA = a.rowIndex / Math.max(1, (hall.rows?.length || 1) - 1);
         const rowB = b.rowIndex / Math.max(1, (hall.rows?.length || 1) - 1);
-        const scoreA = preference === "back" ? heatA * 0.68 + rowA * 0.32 : heatA;
-        const scoreB = preference === "back" ? heatB * 0.68 + rowB * 0.32 : heatB;
+        const scoreA = preference === "back"
+          ? heatA * 0.68 + rowA * 0.32
+          : preference === "aisle"
+            ? heatA * 0.45 + (a.isAisle ? 0.55 : 0)
+            : preference === "center"
+              ? heatA * 0.55 + (1 - Math.abs(a.columnPosition - 0.5) * 2) * 0.45
+              : heatA;
+        const scoreB = preference === "back"
+          ? heatB * 0.68 + rowB * 0.32
+          : preference === "aisle"
+            ? heatB * 0.45 + (b.isAisle ? 0.55 : 0)
+            : preference === "center"
+              ? heatB * 0.55 + (1 - Math.abs(b.columnPosition - 0.5) * 2) * 0.45
+              : heatB;
         return scoreB - scoreA;
       })
       .slice(0, count)
@@ -1178,6 +1272,7 @@ function getPeopleCount() {
 function handleSelectionChange(selectedSeatIds) {
   if (store.isAdmin() || isApplyingAutomaticSelection || !currentScheduleId) return;
   isManualSelection = true;
+  clearDisplayedOrderSelection();
   seatMap.update({ highlightedSeatIds: [] });
   renderSelection(selectedSeatIds);
   renderRecommendation();
@@ -1202,15 +1297,93 @@ function renderSelection(selectedSeatIds) {
     if (submitSelectionButton) submitSelectionButton.disabled = true;
     return;
   }
+  const expectedCount = getPeopleCount();
+  const displayedSeatIds = displayedOrderSeatIds.length ? displayedOrderSeatIds : [];
+  const activeSeatIds = displayedSeatIds.length ? displayedSeatIds : selectedSeatIds;
+  const countText = `（${activeSeatIds.length}/${expectedCount}）`;
+  const orderSelectionLabel = displayedOrderStatus === "purchased" ? "已购座位" : "已锁定座位";
   selectionText.textContent = currentScheduleId
-    ? pendingPaymentOrder
-      ? `已锁定座位：${pendingPaymentOrder.seatIds.join("、")}`
-      : selectedSeatIds.length
-        ? `${isManualSelection ? "已选座位" : "B 推荐座位"}：${selectedSeatIds.join("、")}`
+    ? displayedSeatIds.length
+      ? `${orderSelectionLabel}${countText}：${displayedSeatIds.join("、")}`
+      : pendingPaymentOrder
+        ? `已锁定座位（${getOrderSeatIds(pendingPaymentOrder).length}/${expectedCount}）：${getOrderSeatIds(pendingPaymentOrder).join("、")}`
+        : selectedSeatIds.length
+          ? `${isManualSelection ? "已选座位" : "B 推荐座位"}${countText}：${selectedSeatIds.join("、")}`
         : "尚未选择座位"
     : "请选择场次";
   if (submitSelectionButton) {
-    submitSelectionButton.disabled = !currentScheduleId || selectedSeatIds.length !== getPeopleCount();
+    submitSelectionButton.disabled = Boolean(displayedSeatIds.length || pendingPaymentOrder) ||
+      !currentScheduleId ||
+      selectedSeatIds.length !== expectedCount;
+  }
+}
+
+function setDisplayedOrderSelection(order) {
+  if (!order || order.scheduleId && order.scheduleId !== currentScheduleId) {
+    clearDisplayedOrderSelection({ updateSeatMap: false });
+    return;
+  }
+  displayedOrderId = order.orderId || "";
+  displayedOrderSeatIds = getOrderSeatIds(order);
+  displayedOrderStatus = order.status || "";
+}
+
+function clearDisplayedOrderSelection({ updateSeatMap = true } = {}) {
+  displayedOrderId = "";
+  displayedOrderSeatIds = [];
+  displayedOrderStatus = "";
+  if (restartBookingButton) restartBookingButton.hidden = true;
+  if (updateSeatMap) {
+    seatMap.update({ displaySelectedSeatIds: [] });
+  }
+}
+
+function resetBookingFlow() {
+  pendingPaymentOrder = null;
+  clearDisplayedOrderSelection({ updateSeatMap: false });
+  activeRecommendationSeatIds = [];
+  currentRecommendationReport = null;
+  currentHeatMap = [];
+  currentScheduleId = "";
+  isManualSelection = false;
+  currentOrderPage = 1;
+  if (scheduleSelect) scheduleSelect.value = "";
+  if (heatDaySelect) {
+    heatDaySelect.innerHTML = `<option value="6">选择场次后查看</option>`;
+    heatDaySelect.disabled = true;
+  }
+  realtimeClient.setActiveSchedule("");
+  realtimeClient.publishSelection("", []);
+  seatMap.update({
+    hall: null,
+    seatState: [],
+    heatMap: [],
+    highlightedSeatIds: [],
+    selectedSeatIds: [],
+    displaySelectedSeatIds: [],
+    maxSelected: getPeopleCount(),
+  });
+  seatMap.resetFocus();
+  setProgressStep(1);
+  renderSelection([]);
+  renderRecommendation();
+  renderOrders();
+  renderFocusedSeat(null);
+  setFeedback("已回到初始订票界面，请重新选择影片与场次。", "info");
+}
+
+function createSafeRealtimeSeatClient(options) {
+  try {
+    return createRealtimeSeatClient(options);
+  } catch (error) {
+    console.warn("[Realtime] 实时协同初始化失败，已降级为本地选座。", error);
+    options?.onStatus?.({ state: "offline", label: "实时协同不可用 · 本地选座可继续" });
+    return {
+      clientId: "local-fallback",
+      setActiveSchedule: () => {},
+      publishSelection: () => {},
+      destroy: () => {},
+    };
   }
 }
 
@@ -1247,6 +1420,7 @@ function renderFocusedSeat(seat) {
   if (!currentScheduleId || !seat) return;
   const label = {
     available: "可选",
+    selected: "已选",
     reserved: "已锁定",
     sold: "已售",
     remote: "其他观众正在选择",
@@ -1257,7 +1431,7 @@ function renderFocusedSeat(seat) {
 }
 
 function buildRecommendationInput(schedule) {
-  const preference = preferenceSelect?.value || "center";
+  const preference = preferenceSelect?.value || "none";
 
   return {
     ticketType: ticketTypeSelect?.value || "single",
@@ -1266,6 +1440,7 @@ function buildRecommendationInput(schedule) {
     selectedScheduleId: schedule?.scheduleId,
     needAccessibility: Boolean(needAccessibilityInput?.checked),
     ages: buildAudienceAges(getPeopleCount()),
+    preferenceMode: preference,
     preferences: {
       preferCenter: preference === "center",
       preferBack: preference === "back",
@@ -1341,10 +1516,11 @@ function redrawCurrentScheduleAfterOrder() {
     heatMap: currentHeatMap,
     highlightedSeatIds: [],
     selectedSeatIds: [],
+    displaySelectedSeatIds: displayedOrderSeatIds,
     maxSelected: getPeopleCount(),
   });
   isApplyingAutomaticSelection = false;
-  renderSelection([]);
+  renderSelection(displayedOrderSeatIds);
   renderRecommendation();
   renderAdminSchedule();
   renderOrders();
@@ -1356,11 +1532,12 @@ function openPaymentDialog(order) {
   const schedule = store.getScheduleById(order.scheduleId);
   const movie = schedule ? store.getMovieById(schedule.movieId) : null;
   const hall = schedule ? store.getHallById(schedule.hallId) : null;
+  const seatIds = getOrderSeatIds(order);
   if (paymentSummary) {
     paymentSummary.innerHTML = `
       <span><strong>电影：</strong>${escapeHtml(movie?.title || "未知影片")}</span>
       <span><strong>场次：</strong>${escapeHtml(`${schedule?.date || ""} ${schedule?.startTime || ""} · ${hall?.hallName || ""}`)}</span>
-      <span><strong>座位：</strong>${escapeHtml(order.seatIds.join("、"))}</span>
+      <span><strong>座位：</strong>${escapeHtml(seatIds.join("、") || "暂无座位记录")}</span>
       <span><strong>订单号：</strong>${escapeHtml(order.orderId)}</span>
       <span><strong>应付金额：</strong>¥${escapeHtml(order.totalPrice)}</span>
     `;
@@ -1368,9 +1545,142 @@ function openPaymentDialog(order) {
   if (confirmPaymentButton) confirmPaymentButton.textContent = `确认支付 ¥${order.totalPrice}`;
   paymentDialog?.showModal();
   setFeedback(
-    `订单已创建并锁定座位：${order.seatIds.join("、")}。完成支付后可在右侧订单中心查看。`,
+    `订单已创建并锁定座位：${seatIds.join("、") || "暂无座位记录"}。完成支付后可在右侧订单中心查看。`,
     "success",
   );
+}
+
+function openViewingRatingDialog(order) {
+  const summary = buildOrderViewingScore(order);
+  const seatIds = getOrderSeatIds(order);
+  pendingRatingOrderId = order.orderId;
+
+  if (ratingSummary) {
+    ratingSummary.innerHTML = `
+      <span><strong>订单：</strong>${escapeHtml(order.orderId)}</span>
+      <span><strong>座位：</strong>${escapeHtml(seatIds.join("、") || "暂无座位记录")}</span>
+      <span><strong>系统评分：</strong>${summary.systemLabel}（${summary.systemValue}/100）</span>
+      <span><strong>综合结果：</strong>${summary.combinedLabel}（${summary.combinedValue}/100）</span>
+      <span><strong>推荐原因：</strong>${escapeHtml(formatViewingScoreReason(summary))}</span>
+    `;
+  }
+  if (ratingValueInput) {
+    ratingValueInput.value = String(order.viewerRating?.ratingValue || 5);
+  }
+  if (ratingCommentInput) {
+    ratingCommentInput.value = order.viewerRating?.comment || "";
+  }
+  ratingDialog?.showModal();
+}
+
+function handleViewingRatingSubmit(event) {
+  event.preventDefault();
+  if (!pendingRatingOrderId) return;
+
+  const result = store.submitViewingRating(pendingRatingOrderId, {
+    ratingValue: ratingValueInput?.value,
+    comment: ratingCommentInput?.value,
+  });
+  if (!result.success) {
+    setFeedback(`评分失败：${result.message}`, "warning");
+    return;
+  }
+
+  const orderId = pendingRatingOrderId;
+  pendingRatingOrderId = "";
+  ratingDialog?.close();
+  renderOrders();
+  setFeedback(`订单 ${orderId} 的观影体验评分已更新，综合结果已同步到订单中心。`, "success");
+}
+
+function buildOrderViewingScoreHtml(order) {
+  const summary = buildOrderViewingScore(order);
+  const viewerText = summary.viewerValue === null
+    ? "观影后可手动补充"
+    : `${summary.viewerRating}/5（折算 ${summary.viewerValue}/100）`;
+  const commentHtml = order.viewerRating?.comment
+    ? `<span class="order-rating-comment"><b>短评</b>${escapeHtml(order.viewerRating.comment)}</span>`
+    : "";
+
+  return `
+    <div class="order-rating-summary" aria-label="观影体验评分">
+      <span><b>系统评分</b>${summary.systemLabel}（${summary.systemValue}/100）</span>
+      <span><b>观众评分</b>${viewerText}</span>
+      <span><b>综合结果</b>${summary.combinedLabel}（${summary.combinedValue}/100）</span>
+      <span><b>评分原因</b>${escapeHtml(formatViewingScoreReason(summary))}</span>
+      ${commentHtml}
+    </div>
+  `;
+}
+
+function buildOrderViewingScore(order) {
+  const schedule = store.getScheduleById(order.scheduleId);
+  const hall = schedule ? store.getHallById(schedule.hallId) : null;
+  const seatState = schedule ? store.getSeatStateBySchedule(schedule.scheduleId) : [];
+  const systemScore = evaluateViewingExperience(getOrderSeatIds(order), { hall, seatState, schedule });
+  const systemValue = clampScore(systemScore.scoreValue);
+  const viewerRating = Number(order.viewerRating?.ratingValue);
+  const hasViewerRating = Number.isFinite(viewerRating);
+  const viewerValue = hasViewerRating ? clampScore(viewerRating * 20) : null;
+  const combinedValue = viewerValue === null
+    ? systemValue
+    : clampScore(systemValue * 0.7 + viewerValue * 0.3);
+
+  return {
+    systemLabel: systemScore.scoreLabel || scoreLabelByValue(systemValue),
+    systemValue,
+    viewerRating: hasViewerRating ? Math.round(viewerRating * 10) / 10 : null,
+    viewerValue,
+    combinedLabel: scoreLabelByValue(combinedValue),
+    combinedValue,
+    scoreDetails: systemScore.scoreDetails || {},
+  };
+}
+
+function formatViewingScoreReason(summary) {
+  const detailLabels = {
+    angle: "视角",
+    distance: "距离",
+    spacing: "周边空位",
+    preference: "偏好匹配",
+  };
+  const detailText = Object.entries(detailLabels)
+    .map(([key, label]) => {
+      const value = summary.scoreDetails?.[key];
+      return Number.isFinite(value) ? `${label}${Math.round(value * 100)}` : "";
+    })
+    .filter(Boolean)
+    .join("、");
+  const userPart = summary.viewerValue === null
+    ? "尚未加入观众手动评分"
+    : `观众评分折算 ${summary.viewerValue}/100，占综合结果 30%`;
+  return `${detailText || "系统评分依据座位位置"}；${userPart}。`;
+}
+
+function clampScore(value) {
+  return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+}
+
+function scoreLabelByValue(value) {
+  if (value >= 85) return "极佳";
+  if (value >= 65) return "优秀";
+  return "一般";
+}
+
+function getOrderSeatIds(order) {
+  if (Array.isArray(order?.seatIds)) {
+    return order.seatIds.filter(Boolean);
+  }
+  if (typeof order?.seatIds === "string" && order.seatIds) {
+    return order.seatIds.split(/[、,\s]+/).filter(Boolean);
+  }
+  if (Array.isArray(order?.selectedSeatIds)) {
+    return order.selectedSeatIds.filter(Boolean);
+  }
+  if (typeof order?.seatId === "string" && order.seatId) {
+    return [order.seatId];
+  }
+  return [];
 }
 
 function renderOrders() {
@@ -1426,13 +1736,16 @@ function renderOrders() {
         const movie = schedule ? store.getMovieById(schedule.movieId) : null;
         const hall = schedule ? store.getHallById(schedule.hallId) : null;
         const safeOrderId = escapeHtml(order.orderId);
+        const seatIds = getOrderSeatIds(order);
+        const canRateOrder = order.status === "purchased" && currentUser?.userId === order.userId && seatIds.length > 0;
         const actionHtml = order.status === "booked"
           ? isAdmin
             ? `<button class="order-action-secondary" type="button" data-order-action="cancel" data-order-id="${safeOrderId}">取消预订</button>`
             : `<button type="button" data-order-action="pay" data-order-id="${safeOrderId}">继续支付</button>
                <button class="order-action-secondary" type="button" data-order-action="cancel" data-order-id="${safeOrderId}">取消</button>`
           : order.status === "purchased"
-            ? `<button class="order-action-secondary" type="button" data-order-action="refund" data-order-id="${safeOrderId}">${isAdmin ? "办理退票" : "申请退票"}</button>`
+            ? `${canRateOrder ? `<button type="button" data-order-action="rate" data-order-id="${safeOrderId}">${order.viewerRating ? "修改评分" : "观影评分"}</button>` : ""}
+               <button class="order-action-secondary" type="button" data-order-action="refund" data-order-id="${safeOrderId}">${isAdmin ? "办理退票" : "申请退票"}</button>`
             : "";
         return `
           <article class="order-card">
@@ -1446,11 +1759,12 @@ function renderOrders() {
             <div class="order-card-details">
               <span><b>场次</b>${escapeHtml(schedule ? `${schedule.date} ${schedule.startTime}` : order.scheduleId)}</span>
               <span><b>影厅</b>${escapeHtml(hall?.hallName || "未知影厅")}</span>
-              <span><b>座位</b>${escapeHtml(order.seatIds.join("、"))}</span>
+              <span><b>座位</b>${escapeHtml(seatIds.join("、") || "暂无座位记录")}</span>
               <span><b>金额</b>¥${escapeHtml(order.totalPrice)}</span>
               <span><b>下单</b>${formatOrderTime(order.createdAt)}</span>
               ${order.status === "purchased" ? `<span class="pickup-code"><b>取票码</b>${escapeHtml(getPickupCode(order.orderId))}</span>` : ""}
             </div>
+            ${order.status === "purchased" ? buildOrderViewingScoreHtml(order) : ""}
             ${isAdmin ? `<p class="order-owner">用户 ID：${escapeHtml(order.userId)}</p>` : ""}
             ${actionHtml ? `<div class="order-card-actions">${actionHtml}</div>` : ""}
           </article>
@@ -1461,6 +1775,23 @@ function renderOrders() {
   orderList.innerHTML = `
     <div class="order-card-list">${orderCards}</div>
   `;
+}
+
+function safelyRenderOrders() {
+  try {
+    renderOrders();
+  } catch (error) {
+    console.error("[Orders] 渲染订单中心失败，已跳过异常缓存订单。", error);
+    if (orderList) {
+      orderList.innerHTML = `
+        <div class="order-empty">
+          <span class="order-empty-icon">票</span>
+          <strong>订单缓存暂不可读</strong>
+          <span>选座主流程仍可继续；如需查看旧订单，可清理浏览器缓存后重试。</span>
+        </div>
+      `;
+    }
+  }
 }
 
 function renderUserSummary() {
@@ -1530,13 +1861,23 @@ function handleOrderAction(event) {
 
   if (button.dataset.orderAction === "pay") {
     pendingPaymentOrder = order;
+    setDisplayedOrderSelection(order);
+    if (order.scheduleId === currentScheduleId) redrawCurrentScheduleAfterOrder();
     openPaymentDialog(order);
+    return;
+  }
+
+  if (button.dataset.orderAction === "rate") {
+    openViewingRatingDialog(order);
     return;
   }
 
   const result = button.dataset.orderAction === "refund"
     ? store.refundOrder(order.orderId)
     : store.cancelOrder(order.orderId);
+  if (displayedOrderId === order.orderId) {
+    clearDisplayedOrderSelection({ updateSeatMap: false });
+  }
   if (currentScheduleId) redrawCurrentScheduleAfterOrder();
   else renderOrders();
   setFeedback(result.message, result.success ? "success" : "warning");

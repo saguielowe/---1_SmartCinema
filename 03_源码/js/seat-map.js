@@ -40,6 +40,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
   const ctx = canvas.getContext("2d");
   let options = normalizeOptions(initialOptions);
   let selectedSeatIds = new Set(initialOptions.selectedSeatIds || []);
+  let isRecommendationSelectionActive = hasSameSeatIds(selectedSeatIds, initialOptions.highlightedSeatIds || []);
   let hitAreas = [];
   let focusedSeatId = "";
   let activeSelectedSeatId = "";
@@ -55,6 +56,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
     options = normalizeOptions({ ...options, ...nextOptions });
     if (Object.prototype.hasOwnProperty.call(nextOptions, "selectedSeatIds")) {
       selectedSeatIds = new Set(nextOptions.selectedSeatIds || []);
+      isRecommendationSelectionActive = hasSameSeatIds(selectedSeatIds, options.highlightedSeatIds);
     }
     removeUnavailableSelections();
     render();
@@ -100,12 +102,22 @@ export function createSeatMap(canvas, initialOptions = {}) {
         seatRadius,
         stateBySeatId,
         heatBySeatId,
+        displaySelectedSeatIds: new Set(options.displaySelectedSeatIds),
       });
     });
     drawInteractionEffects(performance.now());
   }
 
-  function drawRow({ row, rowIndex, cellSize, rowSpacing, seatRadius, stateBySeatId, heatBySeatId }) {
+  function drawRow({
+    row,
+    rowIndex,
+    cellSize,
+    rowSpacing,
+    seatRadius,
+    stateBySeatId,
+    heatBySeatId,
+    displaySelectedSeatIds,
+  }) {
     const rowWidth = row.pattern.length * cellSize;
     const startX = canvas.width / 2 - rowWidth / 2 + (row.offsetX || 0);
     const baseY = TOP_OFFSET + rowIndex * rowSpacing;
@@ -124,9 +136,12 @@ export function createSeatMap(canvas, initialOptions = {}) {
       const heatScore = heatBySeatId.get(seatId) ?? 0;
       const isRemoteSelection = options.remoteSelectedSeatIds.includes(seatId) &&
         storedStatus === "available";
+      const isDisplaySelected = displaySelectedSeatIds.has(seatId);
       const status = isRemoteSelection
         ? "remote"
-        : selectedSeatIds.has(seatId) && storedStatus === "available"
+        : isDisplaySelected
+          ? "selected"
+          : selectedSeatIds.has(seatId) && storedStatus === "available"
           ? "selected"
           : storedStatus;
       const interactiveStatus = isRemoteSelection ? "remote" : storedStatus;
@@ -149,6 +164,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
         radius: Math.max(10, seatRadius + 5),
         seatId,
         status: interactiveStatus,
+        displayStatus: status,
         seatType: cellType,
         heatScore,
       });
@@ -207,7 +223,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
     }
     if (isAvailableAccessible) {
       // 无障碍位用方形轮廓与普通圆形座位区分，小尺寸影厅图中也能辨认。
-      ctx.roundRect(x - radius - 1, y - radius - 1, radius * 2 + 2, radius * 2 + 2, 2.5);
+      drawRoundedRectanglePath(x - radius - 1, y - radius - 1, radius * 2 + 2, radius * 2 + 2, 2.5);
     } else {
       ctx.arc(x, y, radius, 0, Math.PI * 2);
     }
@@ -223,7 +239,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
       ctx.strokeStyle = accessibleColor;
       ctx.lineWidth = 2.5;
       if (isAvailableAccessible) {
-        ctx.roundRect(x - radius - 3, y - radius - 3, radius * 2 + 6, radius * 2 + 6, 3.5);
+        drawRoundedRectanglePath(x - radius - 3, y - radius - 3, radius * 2 + 6, radius * 2 + 6, 3.5);
       } else {
         ctx.arc(x, y, radius + 3, 0, Math.PI * 2);
       }
@@ -276,6 +292,24 @@ export function createSeatMap(canvas, initialOptions = {}) {
     }
 
     ctx.restore();
+  }
+
+  function drawRoundedRectanglePath(x, y, width, height, radius) {
+    if (typeof ctx.roundRect === "function") {
+      ctx.roundRect(x, y, width, height, radius);
+      return;
+    }
+
+    const safeRadius = Math.min(radius, width / 2, height / 2);
+    ctx.moveTo(x + safeRadius, y);
+    ctx.lineTo(x + width - safeRadius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+    ctx.lineTo(x + width, y + height - safeRadius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+    ctx.lineTo(x + safeRadius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+    ctx.lineTo(x, y + safeRadius);
+    ctx.quadraticCurveTo(x, y, x + safeRadius, y);
   }
 
   function drawColorBlindStatusMark({ x, y, radius, status }) {
@@ -424,15 +458,23 @@ export function createSeatMap(canvas, initialOptions = {}) {
 
   function selectSeat(seatId, { multi = false } = {}) {
     const wasSelected = selectedSeatIds.has(seatId);
-    if (selectedSeatIds.has(seatId)) {
+    const isReplacingRecommendation = isRecommendationSelectionActive;
+    if (isReplacingRecommendation) {
+      selectedSeatIds = new Set([seatId]);
+      activeSelectedSeatId = seatId;
+      isRecommendationSelectionActive = false;
+    } else if (selectedSeatIds.has(seatId)) {
       selectedSeatIds.delete(seatId);
+      isRecommendationSelectionActive = false;
       if (activeSelectedSeatId === seatId) {
         activeSelectedSeatId = [...selectedSeatIds].at(-1) || "";
       }
     } else if (multi) {
+      clearActiveRecommendationSelection();
       if (!canAddSelection()) return;
       selectedSeatIds.add(seatId);
       activeSelectedSeatId = seatId;
+      isRecommendationSelectionActive = false;
     } else {
       if (selectedSeatIds.size > 0) {
         const replaceId = selectedSeatIds.has(activeSelectedSeatId)
@@ -442,13 +484,21 @@ export function createSeatMap(canvas, initialOptions = {}) {
       }
       selectedSeatIds.add(seatId);
       activeSelectedSeatId = seatId;
+      isRecommendationSelectionActive = false;
     }
 
-    queueInteractionEffect(seatId, wasSelected ? "remove" : "add");
+    queueInteractionEffect(seatId, wasSelected && !isReplacingRecommendation ? "remove" : "add");
     options.onSeatFocus(hitAreas.find((area) => area.seatId === seatId) || { seatId, status: "available" });
     updateCanvasAccessibilityLabel();
     render();
     emitSelectionChange();
+  }
+
+  function clearActiveRecommendationSelection() {
+    if (!isRecommendationSelectionActive) return;
+    selectedSeatIds.clear();
+    activeSelectedSeatId = "";
+    isRecommendationSelectionActive = false;
   }
 
   function canAddSelection({ notify = true } = {}) {
@@ -464,23 +514,16 @@ export function createSeatMap(canvas, initialOptions = {}) {
     const hit = findHitArea(point.x, point.y);
     if (!hit || hit.status !== "available") return;
 
-    event.preventDefault();
-    const hasActiveRecommendation = options.highlightedSeatIds.some((seatId) =>
-      selectedSeatIds.has(seatId)
-    );
-    if (hasActiveRecommendation) {
-      selectedSeatIds.clear();
-      activeSelectedSeatId = "";
-    }
     dragState = {
       mode: selectedSeatIds.has(hit.seatId) ? "remove" : "add",
       visited: new Set(),
       pointerId: event.pointerId,
       startHit: hit,
+      startPoint: point,
+      hasDragged: false,
       limitNotified: false,
     };
     canvas.setPointerCapture?.(event.pointerId);
-    applyDragSeats([hit]);
   }
 
   function applyDragSeats(hits) {
@@ -537,6 +580,24 @@ export function createSeatMap(canvas, initialOptions = {}) {
 
     samples.forEach((sample) => {
       const nextPoint = toCanvasPoint(sample);
+      const moveDistance = Math.hypot(
+        nextPoint.x - dragState.startPoint.x,
+        nextPoint.y - dragState.startPoint.y,
+      );
+      if (!dragState.hasDragged && moveDistance < 8) return;
+      if (!dragState.hasDragged) {
+        dragState.hasDragged = true;
+        const hasActiveRecommendation = options.highlightedSeatIds.some((seatId) =>
+          selectedSeatIds.has(seatId)
+        );
+        if (hasActiveRecommendation) {
+          selectedSeatIds.clear();
+          activeSelectedSeatId = "";
+          isRecommendationSelectionActive = false;
+          dragState.mode = "add";
+        }
+        applyDragSeats([dragState.startHit]);
+      }
       const endHit = findClosestSeatInRow(dragState.startHit, nextPoint.x);
       const crossedSeats = findSeatRange(dragState.startHit, endHit);
       applyDragSeats(crossedSeats);
@@ -548,12 +609,15 @@ export function createSeatMap(canvas, initialOptions = {}) {
     if (event.type === "pointerup") {
       applyDragPointerEvent(event);
     }
+    const shouldSuppressClick = dragState.hasDragged;
     canvas.releasePointerCapture?.(event.pointerId);
     dragState = null;
-    suppressNextClick = true;
-    window.setTimeout(() => {
-      suppressNextClick = false;
-    }, 350);
+    if (shouldSuppressClick) {
+      suppressNextClick = true;
+      window.setTimeout(() => {
+        suppressNextClick = false;
+      }, 350);
+    }
   }
 
   function onCanvasMove(event) {
@@ -563,8 +627,8 @@ export function createSeatMap(canvas, initialOptions = {}) {
       applyDragPointerEvent(event);
     }
     canvas.style.cursor = hit?.status === "available" ? "pointer" : "not-allowed";
-    canvas.title = hit ? `${hit.seatId}（${statusLabel(hit.status)}）` : "";
-    options.onSeatFocus(hit || null);
+    canvas.title = hit ? `${hit.seatId}（${statusLabel(hit.displayStatus || hit.status)}）` : "";
+    options.onSeatFocus(hit ? { ...hit, status: hit.displayStatus || hit.status } : null);
   }
 
   function findHitArea(x, y) {
@@ -689,6 +753,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
     if (selectedSeatIds.size === 0) return;
     selectedSeatIds.clear();
     activeSelectedSeatId = "";
+    isRecommendationSelectionActive = false;
     render();
     if (notify) emitSelectionChange();
   }
@@ -696,6 +761,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
   function setSelectedSeatIds(seatIds) {
     selectedSeatIds = new Set((seatIds || []).slice(0, options.maxSelected));
     activeSelectedSeatId = [...selectedSeatIds].at(-1) || "";
+    isRecommendationSelectionActive = hasSameSeatIds(selectedSeatIds, options.highlightedSeatIds);
     removeUnavailableSelections();
     render();
     emitSelectionChange();
@@ -770,12 +836,20 @@ function normalizeOptions(options) {
     largeText: Boolean(options.largeText),
     reduceMotion: Boolean(options.reduceMotion),
     highlightedSeatIds: options.highlightedSeatIds || [],
+    displaySelectedSeatIds: options.displaySelectedSeatIds || [],
     remoteSelectedSeatIds: options.remoteSelectedSeatIds || [],
     maxSelected: Math.max(1, Number(options.maxSelected) || 1),
     onSelectionChange: options.onSelectionChange || (() => {}),
     onSelectionLimit: options.onSelectionLimit || (() => {}),
     onSeatFocus: options.onSeatFocus || (() => {}),
   };
+}
+
+function hasSameSeatIds(leftSeatIds, rightSeatIds) {
+  const left = leftSeatIds instanceof Set ? leftSeatIds : new Set(leftSeatIds || []);
+  const right = rightSeatIds instanceof Set ? rightSeatIds : new Set(rightSeatIds || []);
+  if (left.size === 0 || left.size !== right.size) return false;
+  return [...left].every((seatId) => right.has(seatId));
 }
 
 function getCurveOffset(cellIndex, length, curveDepth) {
@@ -789,6 +863,7 @@ function getCurveOffset(cellIndex, length, curveDepth) {
 function statusLabel(status) {
   return {
     available: "可选",
+    selected: "已选",
     reserved: "已锁定",
     sold: "已售",
     remote: "其他观众正在选择",
