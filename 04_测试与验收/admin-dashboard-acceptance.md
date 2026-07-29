@@ -4,7 +4,7 @@
 
 ## 验收环境
 
-- 分支：`feature/admin-dashboard`
+- 分支：最终集成分支 `dev`
 - 演示账号：`admin / admin123`
 - 本地 HTTP 服务访问 `03_源码/index.html`
 - 数据来源：项目 Mock 数据与浏览器 LocalStorage
