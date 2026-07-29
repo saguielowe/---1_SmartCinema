@@ -458,7 +458,8 @@ export function createSeatMap(canvas, initialOptions = {}) {
 
   function selectSeat(seatId, { multi = false } = {}) {
     const wasSelected = selectedSeatIds.has(seatId);
-    if (multi && isRecommendationSelectionActive) {
+    const isReplacingRecommendation = isRecommendationSelectionActive;
+    if (isReplacingRecommendation) {
       selectedSeatIds = new Set([seatId]);
       activeSelectedSeatId = seatId;
       isRecommendationSelectionActive = false;
@@ -486,7 +487,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
       isRecommendationSelectionActive = false;
     }
 
-    queueInteractionEffect(seatId, wasSelected ? "remove" : "add");
+    queueInteractionEffect(seatId, wasSelected && !isReplacingRecommendation ? "remove" : "add");
     options.onSeatFocus(hitAreas.find((area) => area.seatId === seatId) || { seatId, status: "available" });
     updateCanvasAccessibilityLabel();
     render();
@@ -593,6 +594,7 @@ export function createSeatMap(canvas, initialOptions = {}) {
           selectedSeatIds.clear();
           activeSelectedSeatId = "";
           isRecommendationSelectionActive = false;
+          dragState.mode = "add";
         }
         applyDragSeats([dragState.startHit]);
       }

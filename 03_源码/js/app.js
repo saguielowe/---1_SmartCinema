@@ -1256,6 +1256,7 @@ function handleSelectionChange(selectedSeatIds) {
   if (store.isAdmin() || isApplyingAutomaticSelection || !currentScheduleId) return;
   isManualSelection = true;
   clearDisplayedOrderSelection();
+  seatMap.update({ highlightedSeatIds: [] });
   renderSelection(selectedSeatIds);
   renderRecommendation();
   dispatchSelectionChange(selectedSeatIds);
