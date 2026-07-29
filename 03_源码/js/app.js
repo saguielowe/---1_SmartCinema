@@ -3,7 +3,7 @@ import { store } from "./store.js?v=manual-rating-1";
 import { createSeatMap } from "./seat-map.js?v=booking-fixes-7";
 import { createRealtimeSeatClient } from "./realtime.js?v=booking-fixes-1";
 import { parseAdvisorRequest } from "./advisor.js?v=booking-fixes-1";
-import { calculateComparisonSummary, calculateScheduleMetrics } from "./admin-dashboard.js?v=admin-dashboard-1";
+import { calculateComparisonSummary, calculateScheduleMetrics } from "./admin-dashboard.js?v=admin-satisfaction-1";
 
 store.initStore();
 
@@ -39,8 +39,10 @@ const adminComparisonSummary = document.querySelector("#admin-comparison-summary
 const adminComparisonBody = document.querySelector("#admin-comparison-body");
 const seatMapTitle = document.querySelector("#seat-map-title");
 const seatMapNote = document.querySelector("#seat-map-note");
+const seatPanelKicker = document.querySelector("#seat-panel-kicker");
 const ordersTitle = document.querySelector("#orders-title");
 const ordersNote = document.querySelector("#orders-note");
+const ordersPanelKicker = document.querySelector("#orders-panel-kicker");
 const progressSteps = [
   document.querySelector("#progress-step-1"),
   document.querySelector("#progress-step-2"),
@@ -769,12 +771,14 @@ function renderRoleView() {
     );
   }
   if (seatMapTitle) seatMapTitle.textContent = isAdmin ? "当前场次座位状态" : "确认你的座位";
+  if (seatPanelKicker) seatPanelKicker.textContent = isAdmin ? "SEAT STATUS" : "STEP 02";
   if (seatMapNote) {
     seatMapNote.textContent = isAdmin
       ? "查看已售、锁定与可用座位分布；管理员模式不会占用或选择座位。"
       : "接受推荐，或清空后手动改选。键盘可用方向键移动，Enter / 空格选择座位。";
   }
   if (ordersTitle) ordersTitle.textContent = isAdmin ? "当前场次订单" : "订单中心";
+  if (ordersPanelKicker) ordersPanelKicker.textContent = isAdmin ? "SHOWTIME ORDERS" : "STEP 03";
   if (ordersNote) {
     ordersNote.textContent = isAdmin
       ? "仅显示左侧所选场次的订单，可按状态筛选并处理取消或退票。"
@@ -849,10 +853,14 @@ function renderAdminSchedule() {
   const metrics = getAdminScheduleMetrics(schedule);
 
   if (adminScheduleDetails) {
+    const hallTypeLabel = formatHallType(hall.hallType);
+    const hallLabel = hallTypeLabel === hall.hallName
+      ? hall.hallName
+      : `${hall.hallName} · ${hallTypeLabel}`;
     adminScheduleDetails.innerHTML = `
       <strong>${escapeHtml(movie?.title || "未知影片")}</strong>
       <span>${escapeHtml(`${schedule.date} ${schedule.startTime}–${schedule.endTime}`)}</span>
-      <span>${escapeHtml(`${hall.hallName} · ${formatHallType(hall.hallType)} · ¥${schedule.price}/座`)}</span>
+      <span>${escapeHtml(`${hallLabel} · ¥${schedule.price}/座`)}</span>
     `;
   }
   if (adminScheduleMetrics) {
@@ -861,6 +869,7 @@ function renderAdminSchedule() {
       ${renderAdminMetric("可用座位", metrics.available, `${metrics.reserved} 个锁定`)}
       ${renderAdminMetric("场次订单", metrics.orderCount, "含全部状态")}
       ${renderAdminMetric("估算票房", formatCurrency(metrics.estimatedRevenue), "按已售座位计算")}
+      ${renderAdminMetric("观众满意度", formatViewerSatisfaction(metrics), `${metrics.viewerRatingCount} 份有效评分`)}
     `;
   }
 }
@@ -883,6 +892,7 @@ function openAdminComparison() {
       ${renderAdminMetric("综合上座率", formatPercent(summary.occupancyRate), `${summary.sold}/${summary.capacity} 已售`)}
       ${renderAdminMetric("全部订单", summary.orderCount, `${summary.reserved} 个座位锁定中`)}
       ${renderAdminMetric("估算总票房", formatCurrency(summary.estimatedRevenue), "按当前已售座位计算")}
+      ${renderAdminMetric("总体满意度", formatViewerSatisfaction(summary), `${summary.viewerRatingCount} 份有效评分`)}
     `;
   }
   if (adminComparisonBody) {
@@ -893,6 +903,7 @@ function openAdminComparison() {
         <td>${metrics.sold} / ${metrics.capacity}</td>
         <td><span class="occupancy-value">${formatPercent(metrics.occupancyRate)}</span><i><b style="width:${Math.round(metrics.occupancyRate * 100)}%"></b></i></td>
         <td>${metrics.orderCount}</td>
+        <td>${formatViewerSatisfaction(metrics)}<small class="rating-count">${metrics.viewerRatingCount} 份</small></td>
         <td>${formatCurrency(metrics.estimatedRevenue)}</td>
         <td><button type="button" data-admin-schedule-id="${escapeHtml(schedule.scheduleId)}">查看</button></td>
       </tr>
@@ -903,6 +914,12 @@ function openAdminComparison() {
 
 function formatPercent(value) {
   return `${(Number(value || 0) * 100).toFixed(1)}%`;
+}
+
+function formatViewerSatisfaction(metrics) {
+  return Number.isFinite(metrics?.viewerRatingAverage)
+    ? `${metrics.viewerRatingAverage.toFixed(1)} / 5`
+    : "暂无";
 }
 
 function formatCurrency(value) {

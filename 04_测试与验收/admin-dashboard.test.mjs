@@ -17,7 +17,12 @@ const metrics = calculateScheduleMetrics({
     { status: "available" },
     { status: "available" },
   ],
-  orders: [{}, {}],
+  orders: [
+    { viewerRating: { ratingValue: 5 } },
+    { viewerRating: { ratingValue: 3 } },
+    { viewerRating: { ratingValue: 6 } },
+    { viewerRating: { ratingValue: "无效" } },
+  ],
 });
 
 assert.deepEqual(metrics, {
@@ -26,24 +31,49 @@ assert.deepEqual(metrics, {
   reserved: 1,
   sold: 2,
   occupancyRate: 0.4,
-  orderCount: 2,
+  orderCount: 4,
   estimatedRevenue: 136,
+  viewerRatingCount: 2,
+  viewerRatingTotal: 8,
+  viewerRatingAverage: 4,
 });
 
 assert.deepEqual(
   calculateComparisonSummary([
     metrics,
-    { ...metrics, capacity: 10, sold: 5, reserved: 0, orderCount: 3, estimatedRevenue: 340 },
+    {
+      ...metrics,
+      capacity: 10,
+      sold: 5,
+      reserved: 0,
+      orderCount: 3,
+      estimatedRevenue: 340,
+      viewerRatingCount: 1,
+      viewerRatingTotal: 2,
+      viewerRatingAverage: 2,
+    },
   ]),
   {
     capacity: 15,
     sold: 7,
     reserved: 1,
-    orderCount: 5,
+    orderCount: 7,
     estimatedRevenue: 476,
     occupancyRate: 7 / 15,
+    viewerRatingCount: 3,
+    viewerRatingTotal: 10,
+    viewerRatingAverage: 10 / 3,
   },
 );
+
+const noRatingMetrics = calculateScheduleMetrics({
+  schedule: { price: 50 },
+  hall: { capacity: 1 },
+  seatState: [{ status: "available" }],
+  orders: [{}, { viewerRating: { ratingValue: 0 } }],
+});
+assert.equal(noRatingMetrics.viewerRatingCount, 0);
+assert.equal(noRatingMetrics.viewerRatingAverage, null);
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const [html, app, styles] = await Promise.all([
@@ -54,7 +84,11 @@ const [html, app, styles] = await Promise.all([
 
 assert.match(html, /id="admin-schedule-select"/);
 assert.match(html, /id="admin-comparison-dialog"/);
+assert.match(html, /id="seat-panel-kicker"/);
+assert.match(html, /观众满意度/);
 assert.match(app, /orderFilter\.scheduleId = currentScheduleId/);
+assert.match(app, /SEAT STATUS/);
+assert.match(app, /SHOWTIME ORDERS/);
 assert.match(styles, /body\.is-admin-view #seat-canvas[\s\S]*pointer-events:\s*none/);
 
 console.log("admin dashboard regression tests passed");

@@ -10,7 +10,7 @@
     <meta name="theme-color" content="#08111f" />
     <title>SmartCinema · 智能影院选座</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230a8f83'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-size='24' font-family='Arial' font-weight='700' fill='white'%3ESC%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./css/style.css?v=booking-fixes-3" />
+    <link rel="stylesheet" href="./css/style.css?v=admin-satisfaction-1" />
   </head>
   <body>
     <a class="skip-link" href="#booking-workspace">跳到购票区</a>
@@ -166,7 +166,7 @@
         <section class="panel seat-panel" aria-labelledby="seat-map-title">
           <div class="panel-head">
             <div>
-              <p class="panel-kicker">STEP 02</p>
+              <p id="seat-panel-kicker" class="panel-kicker">STEP 02</p>
               <h2 id="seat-map-title">确认你的座位</h2>
               <p id="seat-map-note" class="panel-note">
                 接受推荐，或清空后手动改选。键盘可用方向键移动，Enter / 空格选择座位。
@@ -276,7 +276,7 @@
           <section class="panel orders-panel" aria-labelledby="orders-title">
             <div class="panel-title-row">
               <div>
-                <p class="panel-kicker">STEP 03</p>
+                <p id="orders-panel-kicker" class="panel-kicker">STEP 03</p>
                 <h2 id="orders-title">订单中心</h2>
               </div>
               <span id="order-scope-badge" class="scope-badge">我的订单</span>
@@ -333,6 +333,7 @@
                 <th scope="col">已售 / 座位</th>
                 <th scope="col">上座率</th>
                 <th scope="col">订单</th>
+                <th scope="col">观众满意度</th>
                 <th scope="col">估算票房</th>
                 <th scope="col"><span class="visually-hidden">操作</span></th>
               </tr>
@@ -537,6 +538,6 @@
 
     <div id="app-announcer" class="visually-hidden" aria-live="assertive" aria-atomic="true"></div>
 
-    <script type="module" src="./js/app.js?v=booking-fixes-10"></script>
+    <script type="module" src="./js/app.js?v=admin-satisfaction-1"></script>
   </body>
 </html>

@@ -941,7 +941,8 @@ body.is-admin-view #seat-canvas {
 }
 
 body.is-admin-view .selection-actions,
-body.is-admin-view .hover-seat {
+body.is-admin-view .hover-seat,
+body.is-admin-view .multi-select-hint {
   display: none;
 }
 
@@ -1437,7 +1438,7 @@ body.is-admin-view .selection-bar {
 }
 
 .admin-comparison-summary {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 16px 0;
 }
 
@@ -1489,6 +1490,13 @@ body.is-admin-view .selection-bar {
 .admin-comparison-table td:first-child span {
   color: var(--muted);
   font-size: 0.65rem;
+}
+
+.admin-comparison-table .rating-count {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.61rem;
 }
 
 .admin-comparison-table .occupancy-value {
@@ -2129,6 +2137,10 @@ html.reduce-motion *::after {
 }
 
 @media (max-width: 900px) {
+  .admin-comparison-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .app-shell {
     width: min(100vw - 24px, 1560px);
     padding-top: 18px;
